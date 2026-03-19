@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>선형회귀 시뮬레이션 - R-Squared 추가</title>
+    <style>
+        body { font-family: 'Pretendard', sans-serif; display: flex; flex-direction: column; align-items: center; background: #f8f9fa; margin: 20px; color: #333; }
+        .container { display: flex; gap: 15px; padding: 20px; background: white; border-radius: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); overflow-x: auto; max-width: 95vw; }
+        .canvas-wrapper { display: flex; flex-direction: column; align-items: center; }
+        canvas { background: #fff; border: 1px solid #eee; border-radius: 10px; }
+        .label { margin-top: 10px; font-weight: bold; font-size: 0.9em; color: #555; }
+        
+        .controls { margin-top: 25px; width: 700px; padding: 25px; background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .control-group { display: flex; align-items: center; gap: 15px; margin-bottom: 15px; }
+        .control-group label { width: 100px; font-weight: 600; }
+        input[type=range] { flex-grow: 1; }
+        .stats-num { font-family: monospace; font-size: 1.1em; color: #007bff; width: 60px; text-align: right; }
+        
+        .info-panel { display: flex; justify-content: space-around; margin-top: 10px; border-top: 1px solid #eee; padding-top: 15px; }
+        .info-item { text-align: center; }
+        .info-label { font-size: 0.8em; color: #888; display: block; }
+        .info-value { font-size: 1.2em; font-weight: bold; }
+        
+        button { padding: 12px 24px; cursor: pointer; border-radius: 8px; border: none; background: #333; color: white; font-weight: bold; transition: 0.2s; }
+        button:hover { background: #000; }
+    </style>
+</head>
+<body>
+
+    <h1>Linear Regression Metrics Visualizer</h1>
+    <p style="color: #666; margin-bottom: 25px;">데이터 5개에 대해 $w$와 $b$를 조절하며 오차(MSE)와 결정계수($R^2$)의 변화를 관찰하세요.</p>
+
+    <div class="container">
+        <div class="canvas-wrapper">
+            <canvas id="regCanvas" width="400" height="400"></canvas>
+            <div class="label">Regression Model (Residual Squares)</div>
+        </div>
+        <div class="canvas-wrapper">
+            <canvas id="mseCanvas" width="350" height="400"></canvas>
+            <div class="label">MSE Cost & Gradient (w)</div>
+        </div>
+        <div class="canvas-wrapper">
+            <canvas id="r2Canvas" width="350" height="400"></canvas>
+            <div class="label">R-Squared Score (w)</div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <label>기울기 (w)</label>
+            <input type="range" id="wRange" min="-5" max="5" step="0.01" value="0.5">
+            <span id="wVal" class="stats-num">0.5</span>
+        </div>
+        <div class="control-group">
+            <label>절편 (b)</label>
+            <input type="range" id="bRange" min="0" max="400" step="1" value="200">
+            <span id="bVal" class="stats-num">200</span>
+        </div>
+        
+        <div style="text-align: center; margin-bottom: 20px;">
+            <button onclick="resetData()">데이터 새로 생성 (Linear Trend)</button>
+        </div>
+
+        <div class="info-panel">
+            <div class="info-item">
+                <span class="info-label">Current MSE</span>
+                <span id="mseVal" class="info-value" style="color: #e74c3c;">0</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">R-Squared ($R^2$)</span>
+                <span id="r2Val" class="info-value" style="color: #27ae60;">0</span>
+            </div>
+        </div>
+    </div>
+
+<script>
+    const regCtx = document.getElementById('regCanvas').getContext('2d');
+    const mseCtx = document.getElementById('mseCanvas').getContext('2d');
+    const r2Ctx = document.getElementById('r2Canvas').getContext('2d');
+
+    const wRange = document.getElementById('wRange');
+    const bRange = document.getElementById('bRange');
+    const wVal = document.getElementById('wVal');
+    const bVal = document.getElementById('bVal');
+    const mseValDisplay = document.getElementById('mseVal');
+    const r2ValDisplay = document.getElementById('r2Val');
+
+    let data = [];
+    let ssTot = 0; // Total Sum of Squares (y평균과의 차이 제곱합)
+    const nPoints = 5;
+
+    function resetData() {
+        data = [];
+        const targetW = (Math.random() - 0.5) * 4;
+        const targetB = Math.random() * 100 + 150;
+        
+        let sumY = 0;
+        for (let i = 0; i < nPoints; i++) {
+            let x = 60 + (i * 70); 
+            let x_c = x - 200;
+            let y = targetW * x_c + (400 - targetB) + (Math.random() - 0.5) * 60;
+            y = Math.max(20, Math.min(380, y));
+            data.push({ x, y });
+            sumY += y;
+        }
+        
+        // SS_tot 계산 (데이터 고정 시 불변)
+        const meanY = sumY / nPoints;
+        ssTot = data.reduce((acc, p) => acc + Math.pow(p.y - meanY, 2), 0);
+        
+        draw();
+    }
+
+    function calculateMetrics(w, b) {
+        let ssRes = 0;
+        data.forEach(p => {
+            let predY = w * (p.x - 200) + (400 - b);
+            ssRes += Math.pow(p.y - predY, 2);
+        });
+        const mse = ssRes / nPoints;
+        const r2 = 1 - (ssRes / ssTot);
+        return { mse, r2, ssRes };
+    }
+
+    function getGradientW(w, b) {
+        let grad = 0;
+        data.forEach(p => {
+            let x_c = p.x - 200;
+            let predY = w * x_c + (400 - b);
+            grad += 2 * (predY - p.y) * x_c;
+        });
+        return grad / nPoints;
+    }
+
+    function draw() {
+        const w = parseFloat(wRange.value);
+        const b = parseFloat(bRange.value);
+        wVal.innerText = w.toFixed(2);
+        bVal.innerText = b;
+
+        const { mse, r2 } = calculateMetrics(w, b);
+        mseValDisplay.innerText = Math.floor(mse).toLocaleString();
+        r2ValDisplay.innerText = r2.toFixed(3);
+
+        // --- 1. 회귀 플롯 ---
+        regCtx.clearRect(0, 0, 400, 400);
+        data.forEach(p => {
+            let predY = w * (p.x - 200) + (400 - b);
+            let err = p.y - predY;
+            regCtx.fillStyle = 'rgba(231, 76, 60, 0.2)';
+            regCtx.fillRect(p.x, p.y, -err, -err);
+            regCtx.fillStyle = '#333';
+            regCtx.beginPath(); regCtx.arc(p.x, p.y, 5, 0, Math.PI*2); regCtx.fill();
+        });
+        regCtx.strokeStyle = '#3498db'; regCtx.lineWidth = 2;
+        regCtx.beginPath();
+        regCtx.moveTo(0, w*(0-200)+(400-b)); regCtx.lineTo(400, w*(400-200)+(400-b));
+        regCtx.stroke();
+
+        // --- 2. MSE 곡선 ---
+        const W_SCALE = 35; 
+        const MSE_SCALE = 1/250;
+        mseCtx.clearRect(0, 0, 350, 400);
+        mseCtx.strokeStyle = '#eee'; mseCtx.beginPath();
+        for(let tw=-5; tw<=5; tw+=0.1) {
+            let px = (tw+5)*W_SCALE; let py = 380 - (calculateMetrics(tw, b).mse * MSE_SCALE);
+            tw === -5 ? mseCtx.moveTo(px, py) : mseCtx.lineTo(px, py);
+        }
+        mseCtx.stroke();
+        
+        let curX = (w+5)*W_SCALE; let curY = 380 - (mse * MSE_SCALE);
+        let gradW = getGradientW(w, b);
+        let vSlope = (-gradW * MSE_SCALE) / W_SCALE; // 시각적 접선 보정
+        
+        mseCtx.strokeStyle = '#e74c3c'; mseCtx.beginPath();
+        mseCtx.moveTo(curX-30, curY - vSlope*30); mseCtx.lineTo(curX+30, curY + vSlope*30); mseCtx.stroke();
+        mseCtx.fillStyle = '#e74c3c'; mseCtx.beginPath(); mseCtx.arc(curX, curY, 5, 0, Math.PI*2); mseCtx.fill();
+
+        // --- 3. R-Squared 곡선 ---
+        r2Ctx.clearRect(0, 0, 350, 400);
+        // 가이드선 (R2=1, R2=0)
+        r2Ctx.setLineDash([5, 5]); r2Ctx.strokeStyle = '#ddd';
+        r2Ctx.beginPath(); r2Ctx.moveTo(0, 50); r2Ctx.lineTo(350, 50); r2Ctx.stroke(); // R2=1 line
+        r2Ctx.beginPath(); r2Ctx.moveTo(0, 350); r2Ctx.lineTo(350, 350); r2Ctx.stroke(); // R2=0 line
+        r2Ctx.setLineDash([]);
+
+        r2Ctx.strokeStyle = '#ccc';
+        r2Ctx.beginPath();
+        for(let tw=-5; tw<=5; tw+=0.1) {
+            let px = (tw+5)*W_SCALE;
+            let val = calculateMetrics(tw, b).r2;
+            // R2 시각화: 1.0은 y=50, 0.0은 y=350으로 매핑
+            let py = 350 - (val * 300); 
+            if (py > 400) py = 399; // 캔버스 하단 제한
+            tw === -5 ? r2Ctx.moveTo(px, py) : r2Ctx.lineTo(px, py);
+        }
+        r2Ctx.stroke();
+
+        let curR2Y = 350 - (r2 * 300);
+        r2Ctx.fillStyle = '#27ae60';
+        r2Ctx.beginPath(); r2Ctx.arc(curX, curR2Y, 6, 0, Math.PI*2); r2Ctx.fill();
+        r2Ctx.fillText("R²=1", 5, 45);
+        r2Ctx.fillText("R²=0", 5, 345);
+    }
+
+    wRange.addEventListener('input', draw);
+    bRange.addEventListener('input', draw);
+    resetData();
+</script>
+</body>
+</html>
