@@ -1,0 +1,1055 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>기울기 소실 시뮬레이터</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=IBM+Plex+Sans+KR:wght@300;400;500&display=swap');
+
+:root {
+  --bg: #f7f8fc;
+  --bg2: #ffffff;
+  --bg3: #eef2f8;
+  --bg4: #e0e6f1;
+  --border: rgba(0, 0, 0, 0.08);
+  --border2: rgba(0, 0, 0, 0.15);
+  --text: #1a1e2a;
+  --muted: #8a90a0;
+  --muted2: #5f6678;
+  --accent: #1d4ed8;
+  --accent2: #1e3a8a;
+  --amber: #b45309;
+  --coral: #dc2626;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'IBM Plex Sans KR', sans-serif;
+  --font-ui: 19px;
+  --font-ui-lg: 24px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  display: grid;
+  grid-template-rows: 62px 1fr;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+header {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+header h1 { font-family: var(--mono); font-size: var(--font-ui); font-weight: 500; }
+.badge {
+  font-family: var(--mono);
+  font-size: var(--font-ui);
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  color: var(--muted2);
+  border-radius: 4px;
+  padding: 3px 10px;
+}
+.hstats { margin-left: auto; display: flex; gap: 19px; flex-wrap: wrap; }
+.hstat { font-family: var(--mono); font-size: var(--font-ui); color: var(--muted2); }
+.hstat b { color: var(--accent); font-weight: 500; }
+
+.layout { display: grid; grid-template-columns: 360px 1fr 348px; min-height: 0; }
+.panel { background: var(--bg2); overflow-y: auto; min-height: 0; }
+.panel::-webkit-scrollbar { width: 5px; }
+.panel::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 2px; }
+.lpanel { border-right: 1px solid var(--border); padding: 17px; display: flex; flex-direction: column; gap: 12px; }
+.rpanel { border-left: 1px solid var(--border); padding: 17px; display: flex; flex-direction: column; gap: 12px; }
+
+.card { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+.sec-title {
+  font-family: var(--mono);
+  font-size: var(--font-ui);
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; min-width: 0; }
+.row:last-child { margin-bottom: 0; }
+.lbl { min-width: 104px; font-family: var(--mono); font-size: var(--font-ui); color: var(--muted2); flex: 0 0 auto; }
+.val { min-width: 68px; text-align: right; font-family: var(--mono); font-size: var(--font-ui); flex: 0 0 68px; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+
+input[type=range] {
+  flex: 1;
+  min-width: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: var(--bg4);
+  border-radius: 999px;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+select {
+  flex: 1;
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  background: var(--bg2);
+  color: var(--text);
+  font-size: var(--font-ui);
+  font-family: var(--mono);
+  padding: 5px 8px;
+}
+.tip {
+  font-family: var(--mono);
+  font-size: var(--font-ui);
+  color: var(--muted2);
+  background: var(--bg2);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  padding: 9px 11px;
+  line-height: 1.55;
+}
+
+.main { min-width: 0; display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.canvas-wrap { flex: 1; min-height: 0; position: relative; background: #fff; }
+#nnc { width: 100%; height: 100%; display: block; }
+
+.phase-bar {
+  border-top: 1px solid var(--border);
+  background: var(--bg2);
+  padding: 12px 17px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.pill {
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: var(--accent);
+  border-radius: 5px;
+  padding: 3px 10px;
+  font-family: var(--mono);
+  font-size: var(--font-ui);
+}
+.controls {
+  border-top: 1px solid var(--border);
+  background: var(--bg2);
+  padding: 10px 17px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.btn {
+  font-family: var(--mono);
+  font-size: var(--font-ui);
+  border: 1px solid var(--border2);
+  background: var(--bg2);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.btn:hover { background: var(--bg3); }
+.btn.primary { background: var(--accent); color: #fff; border-color: var(--accent2); }
+.btn.primary:hover { background: var(--accent2); }
+.btn.warn { background: #fffbeb; color: var(--amber); border-color: #fcd34d; }
+.btn.danger { color: var(--coral); border-color: #fca5a5; }
+.speed-wrap { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+.mcard { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+.mlbl { font-family: var(--mono); font-size: var(--font-ui); letter-spacing: 0.11em; color: var(--muted); text-transform: uppercase; margin-bottom: 5px; }
+.mval { font-family: var(--mono); font-size: var(--font-ui-lg); font-weight: 500; }
+.msub { margin-top: 4px; font-family: var(--mono); font-size: var(--font-ui); color: var(--muted2); }
+
+#layer-chart, #delta-map {
+  width: 100%;
+  display: block;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+#layer-chart { height: 168px; }
+#delta-map { height: 204px; }
+
+.log-box {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  min-height: 120px;
+  max-height: 216px;
+  overflow-y: auto;
+  font-family: var(--mono);
+  font-size: var(--font-ui);
+  color: var(--muted2);
+  line-height: 1.8;
+}
+.log-box::-webkit-scrollbar { width: 3px; }
+.log-box::-webkit-scrollbar-thumb { background: var(--bg4); }
+
+.legend { display: flex; gap: 10px; flex-wrap: wrap; font-family: var(--mono); font-size: var(--font-ui); color: var(--muted2); }
+.legend span::before { content: ''; width: 10px; height: 10px; display: inline-block; border-radius: 50%; margin-right: 5px; }
+.legend .out::before { background: #dc2626; }
+.legend .hidden::before { background: #2563eb; }
+.legend .tiny::before { background: #9ca3af; }
+
+@media (max-width: 1180px) {
+  body { grid-template-rows: auto 1fr; overflow: auto; }
+  .layout { grid-template-columns: 1fr; grid-template-rows: auto 560px auto; }
+  .lpanel, .rpanel { border: none; border-top: 1px solid var(--border); }
+  .speed-wrap { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>기울기 소실 시뮬레이터</h1>
+  <span class="badge">Deep MLP · Single Sample</span>
+  <div class="hstats">
+    <span class="hstat">에포크 <b id="h-epoch">0</b></span>
+    <span class="hstat">손실 <b id="h-loss">—</b></span>
+    <span class="hstat">유효 정지율 <b id="h-lock">0%</b></span>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="panel lpanel">
+    <div class="card">
+      <div class="sec-title">네트워크</div>
+      <div class="row"><span class="lbl">은닉층 수</span><input id="depth" type="range" min="2" max="46" step="1" value="3"><span class="val" id="depth-v">3</span></div>
+      <div class="row"><span class="lbl">층당 뉴런</span><input id="width" type="range" min="2" max="16" step="1" value="4"><span class="val" id="width-v">4</span></div>
+      <div class="row"><span class="lbl">초기 스케일</span><input id="init-scale" type="range" min="0.01" max="1.2" step="0.01" value="0.35"><span class="val" id="init-scale-v">0.35</span></div>
+      <div class="row"><span class="lbl">활성화</span>
+        <select id="act-h">
+          <option value="sigmoid">Sigmoid</option>
+          <option value="tanh">Tanh</option>
+          <option value="relu" selected>ReLU</option>
+          <option value="linear">Linear</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="sec-title">학습 설정</div>
+      <div class="row"><span class="lbl">입력 x</span><input id="x" type="range" min="-100000" max="100000" step="1" value="1"><span class="val" id="x-v">1.00</span></div>
+      <div class="row"><span class="lbl">목표 y</span><input id="target" type="range" min="-2" max="2" step="0.05" value="0"><span class="val" id="target-v">0.00</span></div>
+      <div class="row"><span class="lbl">가중치 감쇠</span><input id="wd" type="range" min="0" max="0.01" step="0.0001" value="0.0005"><span class="val" id="wd-v">0.0005</span></div>
+    </div>
+
+    <div class="card">
+      <div class="sec-title">프리셋</div>
+      <div class="row" style="margin-bottom: 0;">
+        <button class="btn" onclick="presetVanishing()">소실 유도</button>
+        <button class="btn danger" onclick="resetNet()">재초기화</button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="canvas-wrap"><canvas id="nnc"></canvas></div>
+    <div class="phase-bar">
+      <span class="pill" id="phase">대기</span>
+      <span id="phase-desc" style="font-size:19px;color:var(--muted2);">스텝 실행으로 층별 기울기 변화와 유효 정지 진행을 확인하세요.</span>
+    </div>
+    <div class="controls">
+      <button class="btn primary" onclick="stepTrain()">1 스텝</button>
+      <button class="btn" id="run-btn" onclick="toggleRun()">▶ 자동 실행</button>
+      <label class="btn" style="display:flex;align-items:center;gap:8px;">
+        <input id="show-unit-delta" type="checkbox" checked style="width:20px;height:20px;">
+        유닛 변화값
+      </label>
+      <div class="speed-wrap">
+        <span style="font-family:var(--mono);font-size:19px;color:var(--muted);">속도</span>
+        <input id="speed" type="range" min="20" max="800" step="20" value="120" style="width:86px">
+        <span style="font-family:var(--mono);font-size:19px;color:var(--muted2);" id="speed-v">120ms</span>
+      </div>
+    </div>
+  </main>
+
+  <aside class="panel rpanel">
+    <div class="mcard"><div class="mlbl">예측값 ŷ</div><div class="mval" id="m-pred">—</div></div>
+    <div class="mcard"><div class="mlbl">손실 MSE</div><div class="mval" id="m-loss">—</div><div class="msub" id="m-loss-sub">—</div></div>
+    <div class="mcard"><div class="mlbl">가장 작은 |δ| 층</div><div class="mval" id="m-weak">—</div><div class="msub" id="m-weak-sub"></div></div>
+    <div class="mcard"><div class="mlbl">유효 정지 파라미터</div><div class="mval" id="m-lock">0%</div><div class="msub" id="m-lock-sub">신규 정지: 0</div></div>
+
+    <div class="mcard" style="padding:12px;">
+      <div class="mlbl" style="margin-bottom:7px;">층별 평균 |δ| (로그 스케일)</div>
+      <canvas id="layer-chart" height="168"></canvas>
+      <div class="legend" style="margin-top:7px;">
+        <span class="out">출력층 근처</span><span class="hidden">은닉층</span><span class="tiny">거의 0</span>
+      </div>
+      <div class="msub" style="margin-top:7px;">노드 광도/링/배지 = 유닛별 |δ| 강도, 회색 엣지 = 유효 정지 상태</div>
+    </div>
+
+    <div class="mcard" style="padding:12px;">
+      <div class="mlbl" style="margin-bottom:7px;">유닛별 |δ| 히트맵</div>
+      <canvas id="delta-map" height="204"></canvas>
+      <div class="msub">행=층, 열=유닛. 어두울수록 소실.</div>
+    </div>
+
+    <div class="mcard" style="padding:12px;">
+      <div class="mlbl" style="margin-bottom:7px;">로그</div>
+      <div class="log-box" id="log">대기 중...</div>
+    </div>
+  </aside>
+</div>
+
+<script>
+let weights = [];
+let biases = [];
+let freezeW = [];
+let freezeB = [];
+let tinyWCount = [];
+let tinyBCount = [];
+
+let epoch = 0;
+let running = false;
+let runTimer = null;
+let lastFwd = null;
+let prevFwd = null;
+let lastGrads = null;
+let lastStats = null;
+let lastLossValue = null;
+let stallCount = 0;
+let lastLockInfo = { totalParams: 0, lockedParams: 0, lockRatio: 0, newLocks: 0, allLocked: false };
+const LOCK_WARMUP_EPOCHS = 6;
+const MIN_LOCK_RATIO_TO_STOP_LOSS = 0.98;
+const MIN_LOCK_RATIO_TO_STOP_STALL = 0.95;
+const FIXED_LR = 0.003;
+const FIXED_SAT_BIAS = 2.8;
+const FIXED_DELTA_GAIN = 1.8;
+const FIXED_LOSS_FLOOR = 1e-10;
+const FIXED_STALL_EPS = 1e-9;
+const FIXED_STALL_PATIENCE = 8;
+const FIXED_LOCK_GRAD = 1.5e-6;
+
+const nnc = document.getElementById('nnc');
+const ctx = nnc.getContext('2d');
+const layerChart = document.getElementById('layer-chart');
+const lctx = layerChart.getContext('2d');
+const deltaMap = document.getElementById('delta-map');
+const dctx = deltaMap.getContext('2d');
+
+function getDepth() { return +document.getElementById('depth').value; }
+function getWidth() { return +document.getElementById('width').value; }
+function getInitScale() { return +document.getElementById('init-scale').value; }
+function getX() { return +document.getElementById('x').value; }
+function getTarget() { return +document.getElementById('target').value; }
+function getLR() { return FIXED_LR; }
+function getWD() { return +document.getElementById('wd').value; }
+function getAct() { return document.getElementById('act-h').value; }
+function getSatBias() { return FIXED_SAT_BIAS; }
+function getSpeed() { return +document.getElementById('speed').value; }
+function showUnitDelta() {
+  const el = document.getElementById('show-unit-delta');
+  return !!(el && el.checked);
+}
+function getDeltaGain() { return FIXED_DELTA_GAIN; }
+function getLossFloor() { return FIXED_LOSS_FLOOR; }
+function getStallEps() { return FIXED_STALL_EPS; }
+function getStallPatience() { return FIXED_STALL_PATIENCE; }
+function getLockGrad() { return FIXED_LOCK_GRAD; }
+
+function makeArch() {
+  const arch = [1];
+  for (let i = 0; i < getDepth(); i++) arch.push(getWidth());
+  arch.push(1);
+  return arch;
+}
+
+function rnd(scale) { return (Math.random() * 2 - 1) * scale; }
+
+function actFn(x, fn) {
+  if (fn === 'sigmoid') return 1 / (1 + Math.exp(-Math.max(-60, Math.min(60, x))));
+  if (fn === 'tanh') return Math.tanh(x);
+  if (fn === 'relu') return Math.max(0, x);
+  return x;
+}
+
+function actFnD(x, fn) {
+  if (fn === 'sigmoid') { const s = actFn(x, fn); return s * (1 - s); }
+  if (fn === 'tanh') { const t = Math.tanh(x); return 1 - t * t; }
+  if (fn === 'relu') return x > 0 ? 1 : 0;
+  return 1;
+}
+
+function deltaAbsToNorm(absDelta, gain) {
+  const x = Math.max(1e-12, Math.min(1, absDelta));
+  const base = (Math.log10(x) + 12) / 12;
+  return Math.pow(base, 1 / Math.max(0.2, gain));
+}
+
+function initNet() {
+  const arch = makeArch();
+  const scale = getInitScale();
+  const sat = getSatBias();
+
+  weights = [];
+  biases = [];
+  freezeW = [];
+  freezeB = [];
+  tinyWCount = [];
+  tinyBCount = [];
+
+  for (let l = 1; l < arch.length; l++) {
+    const fanIn = arch[l - 1];
+    const wL = [], bL = [];
+    const fwL = [], fbL = [];
+    const twL = [], tbL = [];
+
+    for (let i = 0; i < arch[l]; i++) {
+      const row = [];
+      for (let j = 0; j < fanIn; j++) row.push(rnd(scale / Math.sqrt(Math.max(1, fanIn))));
+      wL.push(row);
+      fwL.push(Array(fanIn).fill(false));
+      twL.push(Array(fanIn).fill(0));
+
+      const isHidden = l < arch.length - 1;
+      bL.push(isHidden ? rnd(scale * 0.2) + sat : 0);
+      fbL.push(false);
+      tbL.push(0);
+    }
+
+    weights.push(wL);
+    biases.push(bL);
+    freezeW.push(fwL);
+    freezeB.push(fbL);
+    tinyWCount.push(twL);
+    tinyBCount.push(tbL);
+  }
+
+  epoch = 0;
+  lastFwd = null;
+  prevFwd = null;
+  lastGrads = null;
+  lastStats = null;
+  lastLossValue = null;
+  stallCount = 0;
+  lastLockInfo = { totalParams: 0, lockedParams: 0, lockRatio: 0, newLocks: 0, allLocked: false };
+
+  document.getElementById('h-epoch').textContent = '0';
+  document.getElementById('h-loss').textContent = '—';
+  document.getElementById('h-lock').textContent = '0%';
+  document.getElementById('m-lock').textContent = '0%';
+  document.getElementById('m-lock-sub').textContent = '신규 정지: 0';
+
+  setPhase('초기화', '네트워크가 재초기화되었습니다.');
+  addLog('네트워크 초기화 완료.');
+  render();
+}
+
+function forward(x) {
+  const act = getAct();
+  const acts = [[x]], zs = [];
+
+  for (let l = 0; l < weights.length; l++) {
+    const prev = acts[acts.length - 1];
+    const z = [], a = [];
+    const isOutput = l === weights.length - 1;
+
+    for (let i = 0; i < weights[l].length; i++) {
+      let s = biases[l][i];
+      for (let j = 0; j < prev.length; j++) s += weights[l][i][j] * prev[j];
+      z.push(s);
+      a.push(isOutput ? s : actFn(s, act));
+    }
+    zs.push(z);
+    acts.push(a);
+  }
+
+  return { acts, zs, output: acts[acts.length - 1][0] };
+}
+
+function backward(fwd, target) {
+  const act = getAct();
+  const dW = weights.map(layer => layer.map(node => node.map(() => 0)));
+  const dB = biases.map(layer => layer.map(() => 0));
+  const deltas = weights.map(layer => layer.map(() => 0));
+
+  let delta = [2 * (fwd.output - target)];
+
+  for (let l = weights.length - 1; l >= 0; l--) {
+    const newDelta = Array(weights[l][0].length).fill(0);
+    const isOutput = l === weights.length - 1;
+
+    for (let i = 0; i < weights[l].length; i++) {
+      const local = isOutput ? delta[i] : delta[i] * actFnD(fwd.zs[l][i], act);
+      deltas[l][i] = local;
+      dB[l][i] = local;
+
+      for (let j = 0; j < weights[l][i].length; j++) {
+        dW[l][i][j] = local * fwd.acts[l][j];
+        newDelta[j] += local * weights[l][i][j];
+      }
+    }
+    delta = newDelta;
+  }
+
+  return { dW, dB, deltas };
+}
+
+function applyGrads(grads) {
+  const lr = getLR();
+  const wd = getWD();
+  const lockGrad = getLockGrad();
+  const effPatience = Math.max(2, Math.floor(getStallPatience() / 2));
+
+  let totalParams = 0;
+  let lockedParams = 0;
+  let newLocks = 0;
+
+  for (let l = 0; l < weights.length; l++) {
+    for (let i = 0; i < weights[l].length; i++) {
+      totalParams++;
+      const prevFB = freezeB[l][i];
+      const bStep = Math.abs(lr * grads.dB[l][i]);
+      tinyBCount[l][i] = (epoch >= LOCK_WARMUP_EPOCHS && bStep <= lockGrad) ? (tinyBCount[l][i] + 1) : 0;
+      freezeB[l][i] = tinyBCount[l][i] >= effPatience;
+      if (!prevFB && freezeB[l][i]) newLocks++;
+      if (freezeB[l][i]) lockedParams++;
+      biases[l][i] -= lr * grads.dB[l][i];
+
+      for (let j = 0; j < weights[l][i].length; j++) {
+        totalParams++;
+        const prevFW = freezeW[l][i][j];
+        const wStep = Math.abs(lr * grads.dW[l][i][j]);
+        tinyWCount[l][i][j] = (epoch >= LOCK_WARMUP_EPOCHS && wStep <= lockGrad) ? (tinyWCount[l][i][j] + 1) : 0;
+        freezeW[l][i][j] = tinyWCount[l][i][j] >= effPatience;
+        if (!prevFW && freezeW[l][i][j]) newLocks++;
+        if (freezeW[l][i][j]) lockedParams++;
+
+        const g = grads.dW[l][i][j] + wd * weights[l][i][j];
+        weights[l][i][j] -= lr * g;
+        weights[l][i][j] = Math.max(-50, Math.min(50, weights[l][i][j]));
+      }
+    }
+  }
+
+  return {
+    totalParams,
+    lockedParams,
+    lockRatio: totalParams > 0 ? lockedParams / totalParams : 0,
+    newLocks,
+    allLocked: totalParams > 0 && lockedParams === totalParams
+  };
+}
+
+function layerDeltaStats(deltas) {
+  const means = deltas.map(layer => {
+    const sum = layer.reduce((a, b) => a + Math.abs(b), 0);
+    return sum / Math.max(1, layer.length);
+  });
+
+  const output = means[means.length - 1] || 0;
+  const earliestHidden = means[0] || 0;
+  const ratio = output > 1e-12 ? earliestHidden / output : 0;
+
+  let weakIdx = 0;
+  let weakVal = means[0] || 0;
+  for (let i = 1; i < means.length; i++) {
+    if (means[i] < weakVal) {
+      weakVal = means[i];
+      weakIdx = i;
+    }
+  }
+
+  return { means, ratio, weakIdx, weakVal };
+}
+
+function getVisibleLockRatio() {
+  if (!weights.length) return 0;
+  let total = 0;
+  let locked = 0;
+
+  for (let l = 0; l < weights.length; l++) {
+    const rows = Math.min(weights[l].length, 8);
+    const cols = Math.min(weights[l][0].length, 8);
+    for (let i = 0; i < rows; i++) {
+      total++;
+      if (freezeB[l][i]) locked++;
+      for (let j = 0; j < cols; j++) {
+        total++;
+        if (freezeW[l][i][j]) locked++;
+      }
+    }
+  }
+
+  return total > 0 ? locked / total : 0;
+}
+
+function setPhase(tag, desc) {
+  document.getElementById('phase').textContent = tag;
+  document.getElementById('phase-desc').textContent = desc;
+}
+
+function addLog(message, cls) {
+  const box = document.getElementById('log');
+  const span = document.createElement('span');
+  span.textContent = message + '\n';
+  if (cls === 'warn') span.style.color = '#b45309';
+  box.insertBefore(span, box.firstChild);
+  if (box.children.length > 100) box.removeChild(box.lastChild);
+}
+
+function updateMetrics(loss, fwd, stats, updateEpoch, lockInfo) {
+  document.getElementById('m-pred').textContent = fwd.output.toFixed(5);
+  document.getElementById('m-loss').textContent = loss.toFixed(6);
+  document.getElementById('m-loss-sub').textContent = loss < 0.0001 ? '거의 수렴' : `오차: ${Math.abs(fwd.output - getTarget()).toFixed(5)}`;
+
+  const layerLabel = stats.weakIdx === stats.means.length - 1 ? '출력층' : `은닉층 ${stats.weakIdx + 1}`;
+  document.getElementById('m-weak').textContent = layerLabel;
+  document.getElementById('m-weak-sub').textContent = `|δ|=${stats.weakVal.toExponential(3)}`;
+
+  if (updateEpoch) document.getElementById('h-epoch').textContent = String(epoch);
+  document.getElementById('h-loss').textContent = loss.toFixed(5);
+
+  const info = lockInfo || lastLockInfo;
+  const pct = ((info.lockRatio || 0) * 100).toFixed(1) + '%';
+  const visPct = (getVisibleLockRatio() * 100).toFixed(1) + '%';
+  document.getElementById('h-lock').textContent = pct;
+  document.getElementById('m-lock').textContent = pct;
+  document.getElementById('m-lock-sub').textContent = `신규 정지: ${info.newLocks || 0} | 가시 정지: ${visPct}`;
+
+  if (stats.ratio < 1e-3) addLog('기울기 소실 경고: 초기층으로 전달되는 δ가 매우 작습니다.', 'warn');
+}
+
+function stopByReason(reason, loss, fwd, grads, stats) {
+  lastFwd = fwd;
+  lastGrads = grads;
+  lastStats = stats;
+  updateMetrics(loss, fwd, stats, false, lastLockInfo);
+  setPhase('학습 정지', reason);
+  addLog(reason, 'warn');
+  if (running) stopRun();
+  render();
+}
+
+function singleProbe() {
+  const oldFwd = lastFwd;
+  const fwd = forward(getX());
+  const grads = backward(fwd, getTarget());
+  const loss = (fwd.output - getTarget()) ** 2;
+  const stats = layerDeltaStats(grads.deltas);
+
+  prevFwd = oldFwd;
+  lastFwd = fwd;
+  lastGrads = grads;
+  lastStats = stats;
+
+  setPhase('역전파 관찰', '가중치 갱신 없이 층별 |δ|만 측정했습니다.');
+  updateMetrics(loss, fwd, stats, false, lastLockInfo);
+  render();
+}
+
+function stepTrain() {
+  const oldFwd = lastFwd;
+  const fwd = forward(getX());
+  const grads = backward(fwd, getTarget());
+  const loss = (fwd.output - getTarget()) ** 2;
+  const stats = layerDeltaStats(grads.deltas);
+
+  const lossFloor = getLossFloor();
+  const stallEps = getStallEps();
+  const stallPatience = getStallPatience();
+
+  const preLockRatio = lastLockInfo.lockRatio || 0;
+
+  if (loss <= lossFloor && preLockRatio >= MIN_LOCK_RATIO_TO_STOP_LOSS) {
+    stopByReason(`손실이 거의 0입니다 (L=${loss.toExponential(2)}). 에포크 진행을 중단합니다.`, loss, fwd, grads, stats);
+    return;
+  }
+
+  if (lastLossValue !== null && Math.abs(lastLossValue - loss) <= stallEps) {
+    stallCount++;
+    if (stallCount >= stallPatience && preLockRatio >= MIN_LOCK_RATIO_TO_STOP_STALL) {
+      stopByReason(`손실 변화가 ${stallPatience}회 연속 매우 작습니다 (|ΔL|<=${stallEps.toExponential(1)}).`, loss, fwd, grads, stats);
+      return;
+    }
+  } else {
+    stallCount = 0;
+  }
+
+  lastLossValue = loss;
+  const lockInfo = applyGrads(grads);
+  lastLockInfo = lockInfo;
+
+  if (lockInfo.newLocks > 0) {
+    addLog(`유효 정지 +${lockInfo.newLocks} (누적 ${(lockInfo.lockRatio * 100).toFixed(1)}%)`, 'warn');
+  }
+
+  if (lockInfo.allLocked) {
+    stopByReason(`대부분 파라미터의 업데이트가 매우 작습니다 (loss=${loss.toFixed(6)}). 기울기 소실로 인한 정체를 관찰했습니다.`, loss, fwd, grads, stats);
+    return;
+  }
+
+  epoch++;
+  prevFwd = oldFwd;
+  lastFwd = fwd;
+  lastGrads = grads;
+  lastStats = stats;
+
+  setPhase('학습 스텝', `에포크 ${epoch} 업데이트 완료`);
+  updateMetrics(loss, fwd, stats, true, lockInfo);
+  addLog(`[${epoch}] L=${loss.toFixed(6)} | ratio=${stats.ratio.toExponential(2)} | lock=${(lockInfo.lockRatio * 100).toFixed(1)}%`);
+  render();
+}
+
+function toggleRun() {
+  running = !running;
+  const btn = document.getElementById('run-btn');
+  if (running) {
+    btn.textContent = '■ 정지';
+    btn.className = 'btn warn';
+    runTimer = setInterval(stepTrain, getSpeed());
+  } else {
+    stopRun();
+  }
+}
+
+function stopRun() {
+  running = false;
+  clearInterval(runTimer);
+  document.getElementById('run-btn').textContent = '▶ 자동 실행';
+  document.getElementById('run-btn').className = 'btn';
+}
+
+function setSlider(id, value, dec) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.value = String(value);
+  const out = document.getElementById(id + '-v');
+  if (!out) return;
+  if (id === 'loss-floor' || id === 'stall-eps' || id === 'lock-grad') out.textContent = (+value).toExponential(1);
+  else out.textContent = (+value).toFixed(dec);
+}
+
+function presetVanishing() {
+  setSlider('depth', 32, 0);
+  setSlider('width', 3, 0);
+  setSlider('init-scale', 0.35, 2);
+  document.getElementById('act-h').value = 'sigmoid';
+  setSlider('wd', 0.00001, 4);
+  setSlider('x', 100000, 2);
+  setSlider('target', -2.0, 2);
+  resetNet();
+  setPhase('소실 프리셋', '깊은 Sigmoid 포화 조건에서 앞단으로 갈수록 업데이트가 작아지는(유효 정지) 현상을 관찰합니다.');
+}
+
+function resizeNN() {
+  const dpr = window.devicePixelRatio || 1;
+  const wrap = nnc.parentElement;
+  nnc.width = Math.max(320, wrap.clientWidth) * dpr;
+  nnc.height = Math.max(300, wrap.clientHeight) * dpr;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.scale(dpr, dpr);
+}
+
+function drawNetwork() {
+  resizeNN();
+  const W = nnc.width / (window.devicePixelRatio || 1);
+  const H = nnc.height / (window.devicePixelRatio || 1);
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, W, H);
+
+  const arch = makeArch();
+  const padL = 60, padR = 90, padY = 42;
+  const xSpan = W - padL - padR;
+  const ySpan = H - padY * 2;
+  const layerX = arch.map((_, i) => padL + (xSpan * i) / (arch.length - 1));
+  const points = arch.map((n, l) => {
+    const showN = Math.min(n, 8);
+    return Array.from({ length: showN }, (_, i) => ({ x: layerX[l], y: padY + (showN === 1 ? ySpan / 2 : (ySpan * i) / (showN - 1)) }));
+  });
+
+  for (let l = 0; l < weights.length; l++) {
+    const rows = Math.min(weights[l].length, points[l + 1].length);
+    const cols = Math.min(weights[l][0].length, points[l].length);
+    for (let i = 0; i < rows; i++) {
+      for (let j = 0; j < cols; j++) {
+        const from = points[l][j], to = points[l + 1][i];
+        
+        // 실제 전달되는 그래디언트 강도 사용 (역전파 기울기)
+        const grad = lastGrads && lastGrads.dW && lastGrads.dW[l] && lastGrads.dW[l][i] && lastGrads.dW[l][i][j]
+          ? lastGrads.dW[l][i][j]
+          : 0;
+        const gradMag = Math.abs(grad);
+        // 로그 스케일로 정규화 (더 극적인 감마값 0.25 사용)
+        const m = deltaAbsToNorm(gradMag, 0.25);
+        
+        ctx.strokeStyle = grad >= 0
+          ? `rgba(37,99,235,${0.1 + 0.45 * m})`
+          : `rgba(220,38,38,${0.1 + 0.45 * m})`;
+        ctx.lineWidth = 0.2 + 3.3 * m;
+        ctx.beginPath();
+        ctx.moveTo(from.x + 12, from.y);
+        ctx.lineTo(to.x - 12, to.y);
+        ctx.stroke();
+      }
+    }
+  }
+
+  const deltaGain = getDeltaGain();
+  for (let l = 0; l < points.length; l++) {
+    for (let i = 0; i < points[l].length; i++) {
+      const p = points[l][i];
+      const isInput = l === 0;
+      const isOutput = l === points.length - 1;
+      const val = lastFwd ? lastFwd.acts[l][Math.min(i, lastFwd.acts[l].length - 1)] : 0;
+      const prevVal = prevFwd && prevFwd.acts && prevFwd.acts[l]
+        ? prevFwd.acts[l][Math.min(i, prevFwd.acts[l].length - 1)]
+        : null;
+      const vNorm = Math.min(1, Math.abs(val) / 2);
+
+      let d = 0, dNorm = 0, dVisual = 0, dAvgNorm = 0;
+      let unitFrozen = false;
+      if (l > 0 && lastGrads && lastGrads.deltas[l - 1]) {
+        const li = l - 1;
+        const ui = Math.min(i, lastGrads.deltas[li].length - 1);
+        d = lastGrads.deltas[li][ui];
+        dNorm = deltaAbsToNorm(Math.abs(d), 1);
+        dVisual = deltaAbsToNorm(Math.abs(d), deltaGain);
+        if (lastGrads.dW && lastGrads.dW[li] && lastGrads.dW[li][ui]) {
+          const row = lastGrads.dW[li][ui];
+          let sumAbs = 0;
+          for (let k = 0; k < row.length; k++) sumAbs += Math.abs(row[k]);
+          const meanAbs = sumAbs / Math.max(1, row.length);
+          // 뱃지 크기는 더 극적으로 줄어들도록 로그 압축을 강하게 적용
+          dAvgNorm = deltaAbsToNorm(meanAbs, 0.35);
+        }
+        if (freezeB[li] && freezeW[li] && freezeB[li][i] !== undefined) {
+          const inCount = freezeW[li][i] ? freezeW[li][i].length : 0;
+          unitFrozen = freezeB[li][i] && inCount > 0 && freezeW[li][i].every(Boolean);
+        }
+      }
+
+      const base = isInput ? '156,163,175' : (isOutput ? '220,38,38' : '29,78,216');
+
+
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 13, 0, Math.PI * 2);
+      ctx.fillStyle = unitFrozen
+        ? 'rgba(156,163,175,0.35)'
+        : `rgba(${base},${0.12 + 0.2 * vNorm + 0.28 * dVisual})`;
+      ctx.fill();
+      ctx.strokeStyle = unitFrozen ? 'rgba(107,114,128,0.9)' : `rgba(${base},${0.6 + 0.35 * dVisual})`;
+      ctx.lineWidth = unitFrozen ? 2.8 : (1.2 + 3.2 * dVisual);
+      ctx.stroke();
+
+      if (l > 0 && lastGrads && lastGrads.deltas[l - 1]) {
+        const badgeX = p.x + 10, badgeY = p.y - 10;
+        const tiny = dAvgNorm < 0.01;
+        const badgeR = 0.05 + 16 * dAvgNorm;
+        ctx.beginPath();
+        ctx.arc(badgeX, badgeY, badgeR, 0, Math.PI * 2);
+        ctx.fillStyle = tiny ? '#9ca3af' : (d >= 0 ? '#dc2626' : '#2563eb');
+        ctx.fill();
+        if (badgeR >= 4) {
+          ctx.fillStyle = '#fff';
+          ctx.font = `bold ${Math.max(8, Math.min(16, Math.floor(badgeR * 1.4)))}px JetBrains Mono`;
+          ctx.textAlign = 'center';
+          ctx.fillText(tiny ? '0' : (d >= 0 ? '+' : '-'), badgeX, badgeY + Math.min(5, badgeR * 0.35));
+        }
+      }
+
+      if (showUnitDelta()) {
+        const isTiny = Math.abs(val) < 1e-6;
+        const txt = isTiny ? '0' : `${val.toExponential(1)}`;
+        ctx.fillStyle = isTiny ? '#6b7280' : '#6b7280';
+        ctx.font = '19px JetBrains Mono';
+        ctx.textAlign = 'center';
+        ctx.fillText(txt, p.x, p.y + 34);
+      }
+    }
+  }
+
+  ctx.fillStyle = '#6b7280';
+  ctx.font = '19px JetBrains Mono';
+  ctx.textAlign = 'center';
+  arch.forEach((_, i) => {
+    const label = i === 0 ? '입력' : (i === arch.length - 1 ? '출력' : `H${i}`);
+    ctx.fillText(label, layerX[i], 20);
+  });
+}
+
+function drawLayerChart() {
+  const dpr = window.devicePixelRatio || 1;
+  const W = layerChart.clientWidth || 240;
+  const H = 168;
+  layerChart.width = W * dpr;
+  layerChart.height = H * dpr;
+  lctx.setTransform(1, 0, 0, 1, 0, 0);
+  lctx.scale(dpr, dpr);
+
+  lctx.clearRect(0, 0, W, H);
+  lctx.fillStyle = '#ffffff';
+  lctx.fillRect(0, 0, W, H);
+
+  if (!lastStats || !lastStats.means.length) {
+    lctx.fillStyle = '#6b7280';
+    lctx.font = '19px JetBrains Mono';
+    lctx.fillText('아직 데이터가 없습니다.', 10, 24);
+    return;
+  }
+
+  const vals = lastStats.means.map(v => Math.log10(Math.max(v, 1e-12)));
+  const vMin = Math.min(...vals, -12);
+  const vMax = Math.max(...vals, 0);
+  const range = Math.max(1e-6, vMax - vMin);
+
+  const pad = { l: 34, r: 8, t: 10, b: 24 };
+  const plotW = W - pad.l - pad.r;
+  const plotH = H - pad.t - pad.b;
+  const n = vals.length;
+  const bw = Math.max(3, (plotW / Math.max(1, n)) - 4);
+
+  for (let i = 0; i < n; i++) {
+    const v = vals[i];
+    const h = ((v - vMin) / range) * plotH;
+    const x = pad.l + (i * plotW) / n + 2;
+    const y = pad.t + (plotH - h);
+    const meanRaw = lastStats.means[i];
+    const col = meanRaw < 1e-5 ? '#9ca3af' : (i === n - 1 ? '#dc2626' : '#2563eb');
+    lctx.fillStyle = col;
+    lctx.fillRect(x, y, bw, h);
+  }
+
+  lctx.strokeStyle = 'rgba(107,114,128,0.5)';
+  lctx.lineWidth = 1;
+  lctx.beginPath();
+  lctx.moveTo(pad.l, pad.t);
+  lctx.lineTo(pad.l, pad.t + plotH);
+  lctx.lineTo(W - pad.r, pad.t + plotH);
+  lctx.stroke();
+
+  lctx.fillStyle = '#6b7280';
+  lctx.font = '19px JetBrains Mono';
+  lctx.textAlign = 'left';
+  lctx.fillText('log10(|δ|)', 4, 10);
+  lctx.fillText('Layer', W - 38, H - 8);
+}
+
+function drawDeltaMap() {
+  const dpr = window.devicePixelRatio || 1;
+  const W = deltaMap.clientWidth || 240;
+  const H = 204;
+  deltaMap.width = W * dpr;
+  deltaMap.height = H * dpr;
+  dctx.setTransform(1, 0, 0, 1, 0, 0);
+  dctx.scale(dpr, dpr);
+
+  dctx.clearRect(0, 0, W, H);
+  dctx.fillStyle = '#ffffff';
+  dctx.fillRect(0, 0, W, H);
+
+  if (!lastGrads || !lastGrads.deltas || !lastGrads.deltas.length) {
+    dctx.fillStyle = '#6b7280';
+    dctx.font = '19px JetBrains Mono';
+    dctx.fillText('아직 데이터가 없습니다.', 10, 24);
+    return;
+  }
+
+  const deltas = lastGrads.deltas;
+  const rows = deltas.length;
+  const cols = Math.max(...deltas.map(r => r.length));
+  const pad = { l: 32, r: 6, t: 12, b: 18 };
+  const plotW = W - pad.l - pad.r;
+  const plotH = H - pad.t - pad.b;
+  const cw = plotW / cols;
+  const ch = plotH / rows;
+  const gain = getDeltaGain();
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const has = c < deltas[r].length;
+      const x = pad.l + c * cw;
+      const y = pad.t + r * ch;
+      if (!has) {
+        dctx.fillStyle = 'rgba(224,230,241,0.6)';
+        dctx.fillRect(x + 0.5, y + 0.5, cw - 1, ch - 1);
+        continue;
+      }
+
+      const d = deltas[r][c];
+      const m = deltaAbsToNorm(Math.abs(d), gain);
+      const tiny = Math.abs(d) < 1e-8;
+      const sat = 22 + m * 78;
+      const light = 93 - m * 55;
+      const hue = d >= 0 ? 5 : 216;
+      dctx.fillStyle = tiny ? '#d1d5db' : `hsl(${hue} ${sat}% ${light}%)`;
+      dctx.fillRect(x + 0.7, y + 0.7, cw - 1.4, ch - 1.4);
+    }
+  }
+
+  dctx.strokeStyle = 'rgba(107,114,128,0.45)';
+  dctx.lineWidth = 1;
+  dctx.strokeRect(pad.l, pad.t, plotW, plotH);
+
+  dctx.fillStyle = '#6b7280';
+  dctx.font = '19px JetBrains Mono';
+  dctx.textAlign = 'left';
+  dctx.fillText('층', 6, 10);
+  dctx.fillText('유닛', W - 28, H - 4);
+}
+
+function render() {
+  drawNetwork();
+  drawLayerChart();
+  drawDeltaMap();
+}
+
+function bindRange(id, decimals, callback) {
+  const el = document.getElementById(id);
+  const out = document.getElementById(id + '-v');
+  el.oninput = function () {
+    if (out) {
+      if (id === 'loss-floor' || id === 'stall-eps' || id === 'lock-grad') out.textContent = (+this.value).toExponential(1);
+      else out.textContent = (+this.value).toFixed(decimals);
+    }
+    if (callback) callback();
+  };
+}
+
+bindRange('depth', 0, initNet);
+bindRange('width', 0, initNet);
+bindRange('init-scale', 2, initNet);
+bindRange('x', 2, initNet);
+bindRange('target', 2, initNet);
+bindRange('wd', 4, initNet);
+
+document.getElementById('act-h').onchange = initNet;
+document.getElementById('speed').oninput = function () {
+  document.getElementById('speed-v').textContent = this.value + 'ms';
+  if (running) {
+    clearInterval(runTimer);
+    runTimer = setInterval(stepTrain, getSpeed());
+  }
+};
+
+document.getElementById('show-unit-delta').oninput = render;
+
+window.addEventListener('resize', render);
+
+function resetNet() {
+  stopRun();
+  initNet();
+  singleProbe();
+}
+
+resetNet();
+</script>
+</body>
+</html>
