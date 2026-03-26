@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>돛단배 내적 시뮬레이터 Pro</title>
+    <style>
+        body { text-align: center; font-family: 'Pretendard', sans-serif; background: #eef2f7; margin: 0; padding: 20px; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); }
+        canvas { background: #ffffff; border: 2px solid #cbd5e1; border-radius: 15px; cursor: default; touch-action: none; box-shadow: inset 0 2px 5px rgba(0,0,0,0.05); }
+        .info-panel { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 25px; }
+        .card { padding: 15px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; }
+        .label { font-size: 0.85rem; color: #64748b; margin-bottom: 5px; font-weight: 600; }
+        .value { font-size: 1.2rem; font-weight: bold; color: #1e293b; }
+        .status-msg { font-weight: bold; padding: 12px; border-radius: 10px; margin-top: 15px; transition: 0.3s; }
+        .positive { color: #059669; background: #ecfdf5; border: 1px solid #10b981; }
+        .negative { color: #dc2626; background: #fef2f2; border: 1px solid #ef4444; }
+        .neutral { color: #4b5563; background: #f3f4f6; border: 1px solid #94a3b8; }
+        .controls { margin-top: 10px; font-size: 0.9rem; color: #64748b; }
+        b.wind { color: #ef4444; }
+        b.boat { color: #3b82f6; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>⛵ 벡터 내적(Dot Product) 시뮬레이션</h2>
+    <p class="controls">화살표 끝의 동그라미를 잡고 드래그하세요!<br>
+        <b class="boat">● 배의 방향</b> | <b class="wind">● 바람의 방향</b>
+    </p>
+    
+    <canvas id="sim" width="700" height="450"></canvas>
+    
+    <div class="info-panel">
+        <div class="card">
+            <div class="label">두 벡터 사이 각도</div>
+            <div id="angle" class="value">0°</div>
+        </div>
+        <div class="card">
+            <div class="label">내적 값 (cosθ)</div>
+            <div id="dotProduct" class="value">1.00</div>
+        </div>
+        <div class="card">
+            <div class="label">전진 기여도(추진 효율)</div>
+            <div id="efficiency" class="value">100%</div>
+        </div>
+    </div>
+    <div id="status" class="status-msg neutral">마우스를 움직여보세요!</div>
+</div>
+
+<script>
+    const canvas = document.getElementById('sim');
+    const ctx = canvas.getContext('2d');
+    const boatPos = { x: 350, y: 250 };
+    
+    // 두 벡터의 상대적 끝점 좌표
+    let windVec = { x: 120, y: -80 }; 
+    let boatDir = { x: 150, y: 0 }; 
+
+    let draggingTarget = null; // 'wind' 또는 'boat'
+
+    function drawGrid() {
+        ctx.strokeStyle = '#f1f5f9';
+        ctx.lineWidth = 1;
+        for(let i=0; i<canvas.width; i+=50) {
+            ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke();
+        }
+        for(let i=0; i<canvas.height; i+=50) {
+            ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(canvas.width,i); ctx.stroke();
+        }
+    }
+
+    // 돛단배 그리기 (진행 방향에 맞춰 회전)
+    function drawSailingBoat(x, y, dirX, dirY) {
+        const angle = Math.atan2(dirY, dirX);
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(angle);
+
+        // 1. 배 몸체 (Hull)
+        ctx.fillStyle = '#475569';
+        ctx.beginPath();
+        ctx.moveTo(-40, 15);
+        ctx.lineTo(30, 15);
+        ctx.lineTo(50, 0);
+        ctx.lineTo(30, -15);
+        ctx.lineTo(-40, -15);
+        ctx.closePath();
+        ctx.fill();
+
+        // 2. 돛대 (Mast)
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, -60);
+        ctx.stroke();
+
+        // 3. 돛 (Sail) - 바람의 영향을 받는 시각적 효과
+        ctx.fillStyle = '#f8fafc';
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(5, -55);
+        ctx.quadraticCurveTo(35, -30, 5, -5); // 약간 휘어진 돛 모양
+        ctx.lineTo(5, -55);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.restore();
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawGrid();
+        
+        // 내적 계산을 위한 벡터 정규화(단위 벡터) 준비
+        const magB = Math.sqrt(boatDir.x**2 + boatDir.y**2) || 1;
+        const magW = Math.sqrt(windVec.x**2 + windVec.y**2) || 1;
+        
+        // 내적 공식: (A · B) / (|A|*|B|) = cos(θ)
+        const dot = (boatDir.x * windVec.x + boatDir.y * windVec.y) / (magB * magW);
+        const angleRad = Math.acos(Math.max(-1, Math.min(1, dot)));
+        
+        // 1. 배의 진행 방향 벡터 (파란색)
+        drawArrow(boatPos.x, boatPos.y, boatPos.x + boatDir.x, boatPos.y + boatDir.y, '#3b82f6', '배의 방향', true);
+        
+        // 2. 바람의 벡터 (빨간색)
+        drawArrow(boatPos.x, boatPos.y, boatPos.x + windVec.x, boatPos.y + windVec.y, '#ef4444', '바람의 방향');
+
+        // 3. 내적의 시각화 (사영 - Projection)
+        // 바람이 배의 방향으로 얼마나 힘을 쓰는지 계산
+        const projLen = dot * magW; 
+        const projX = boatPos.x + (boatDir.x / magB) * projLen;
+        const projY = boatPos.y + (boatDir.y / magB) * projLen;
+
+        // 투영 점선
+        ctx.setLineDash([5, 5]);
+        ctx.strokeStyle = '#94a3b8';
+        ctx.beginPath();
+        ctx.moveTo(boatPos.x + windVec.x, boatPos.y + windVec.y);
+        ctx.lineTo(projX, projY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 실질적 추진력 벡터 표시 (내적 결과)
+        if (Math.abs(dot) > 0.01) {
+            drawArrow(boatPos.x, boatPos.y, projX, projY, dot > 0 ? '#059669' : '#b91c1c', '', false, 6);
+        }
+
+        // 4. 배 그리기
+        drawSailingBoat(boatPos.x, boatPos.y, boatDir.x, boatDir.y);
+        
+        updateUI(dot, angleRad);
+    }
+
+    function drawArrow(fromx, fromy, tox, toy, color, label, isDashed=false, width=3) {
+        const headlen = 12;
+        const dx = tox - fromx;
+        const dy = toy - fromy;
+        const angle = Math.atan2(dy, dx);
+        
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        if(isDashed) ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(fromx, fromy);
+        ctx.lineTo(tox, toy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 화살표 머리
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(tox, toy);
+        ctx.lineTo(tox - headlen * Math.cos(angle - Math.PI / 7), toy - headlen * Math.sin(angle - Math.PI / 7));
+        ctx.lineTo(tox - headlen * Math.cos(angle + Math.PI / 7), toy - headlen * Math.sin(angle + Math.PI / 7));
+        ctx.closePath();
+        ctx.fill();
+
+        // 조절점 (핸들)
+        ctx.beginPath();
+        ctx.arc(tox, toy, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        if(label) {
+            ctx.font = 'bold 13px sans-serif';
+            ctx.fillStyle = color;
+            ctx.fillText(label, tox + 12, toy + 5);
+        }
+    }
+
+    function updateUI(dot, angleRad) {
+        const angleDeg = Math.round(angleRad * (180 / Math.PI));
+        document.getElementById('angle').innerText = `${angleDeg}°`;
+        document.getElementById('dotProduct').innerText = dot.toFixed(2);
+        
+        // 추진 효율은 내적값이 양수일 때만 의미 있게 표시
+        const eff = Math.round(dot * 100);
+        document.getElementById('efficiency').innerText = `${eff}%`;
+        
+        const statusEl = document.getElementById('status');
+        if (dot > 0.2) {
+            statusEl.innerText = "🚀 순풍: 바람이 배를 힘차게 밀어주고 있습니다! (내적 > 0)";
+            statusEl.className = "status-msg positive";
+        } else if (dot < -0.2) {
+            statusEl.innerText = "🛑 역풍: 바람이 배의 전진을 방해합니다! (내적 < 0)";
+            statusEl.className = "status-msg negative";
+        } else {
+            statusEl.innerText = "📐 수직: 바람이 전진에 도움을 주지 못합니다. (내적 ≈ 0)";
+            statusEl.className = "status-msg neutral";
+        }
+    }
+
+    // 마우스 이벤트 처리
+    function getMousePos(e) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+            x: (e.clientX || e.touches[0].clientX) - rect.left,
+            y: (e.clientY || e.touches[0].clientY) - rect.top
+        };
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+        const pos = getMousePos(e);
+        const distWind = Math.hypot(pos.x - (boatPos.x + windVec.x), pos.y - (boatPos.y + windVec.y));
+        const distBoat = Math.hypot(pos.x - (boatPos.x + boatDir.x), pos.y - (boatPos.y + boatDir.y));
+
+        if (distWind < 20) draggingTarget = 'wind';
+        else if (distBoat < 20) draggingTarget = 'boat';
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (!draggingTarget) {
+            // 커서 모양 변경 로직
+            const pos = getMousePos(e);
+            const distWind = Math.hypot(pos.x - (boatPos.x + windVec.x), pos.y - (boatPos.y + windVec.y));
+            const distBoat = Math.hypot(pos.x - (boatPos.x + boatDir.x), pos.y - (boatPos.y + boatDir.y));
+            canvas.style.cursor = (distWind < 20 || distBoat < 20) ? 'pointer' : 'default';
+            return;
+        }
+
+        const pos = getMousePos(e);
+        if (draggingTarget === 'wind') {
+            windVec.x = pos.x - boatPos.x;
+            windVec.y = pos.y - boatPos.y;
+        } else if (draggingTarget === 'boat') {
+            boatDir.x = pos.x - boatPos.x;
+            boatDir.y = pos.y - boatPos.y;
+        }
+        draw();
+    });
+
+    window.addEventListener('mouseup', () => { draggingTarget = null; });
+
+    // 터치 지원
+    canvas.addEventListener('touchstart', (e) => { e.preventDefault(); /* mousedown 로직과 동일하게 작동하도록 구성 가능 */ }, {passive: false});
+
+    draw();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>내적: 대수적 정의 ≡ 기하학적 정의</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#ffffff;--surface:#f8fafc;--border:#e2e8f0;
+  --text:#1e293b;--dim:#64748b;--accent:#2563eb;--accent-light:#3b82f6;
+  --vec-a:#e11d48;--vec-b:#059669;
+  --proj:#d97706;--dot-vec:#2563eb;--purple:#7c3aed;--comp:#8b5cf6;
+}
+html,body{height:100%;overflow:hidden}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column}
+
+header{
+  padding:18px 32px 14px;
+  background:linear-gradient(180deg,rgba(37,99,235,0.06) 0%,transparent 100%);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+}
+header h1{font-size:22px;font-weight:700;color:var(--accent)}
+header .subtitle{font-size:16px;color:var(--dim);margin-top:2px}
+.proof-badge{font-family:'JetBrains Mono',monospace;font-size:16px;padding:6px 14px;border-radius:20px;border:1px solid var(--accent);color:var(--accent)}
+
+main{flex:1;display:grid;grid-template-columns:1fr 400px;gap:0;overflow:hidden;min-height:0}
+
+.canvas-wrap{position:relative;overflow:hidden;background:#fafbff}
+canvas{display:block;width:100%;height:100%;cursor:grab}
+canvas:active{cursor:grabbing}
+.canvas-hint{
+  position:absolute;bottom:16px;left:50%;transform:translateX(-50%);
+  font-size:16px;color:var(--dim);
+  background:rgba(248,250,252,0.85);backdrop-filter:blur(8px);
+  padding:8px 18px;border-radius:20px;border:1px solid var(--border);pointer-events:none;
+}
+
+.legend{
+  position:absolute;top:16px;left:16px;
+  background:rgba(255,255,255,0.92);backdrop-filter:blur(8px);
+  border:1px solid var(--border);border-radius:12px;padding:14px 18px;
+  display:flex;flex-direction:column;gap:7px;pointer-events:none;
+}
+.legend-item{display:flex;align-items:center;gap:10px;font-size:16px;transition:opacity .3s}
+.legend-item.hidden{opacity:0.25}
+.legend-line{width:28px;height:4px;border-radius:2px}
+
+.sidebar{border-left:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;background:var(--surface)}
+.panel{padding:20px 24px;border-bottom:1px solid var(--border)}
+.panel-title{font-family:'JetBrains Mono',monospace;font-size:16px;text-transform:uppercase;letter-spacing:1.5px;color:var(--accent);margin-bottom:14px;font-weight:600}
+
+.toggle-group{display:flex;flex-direction:column;gap:10px}
+.toggle-row{
+  display:flex;align-items:center;gap:12px;
+  padding:10px 14px;border-radius:10px;
+  border:1px solid var(--border);background:var(--bg);
+  cursor:pointer;user-select:none;transition:all .25s;
+}
+.toggle-row:hover{border-color:rgba(37,99,235,0.3)}
+.toggle-row.active{border-color:var(--accent);background:rgba(37,99,235,0.03)}
+.toggle-num{
+  width:26px;height:26px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600;
+  background:var(--border);color:var(--dim);
+  transition:all .25s;flex-shrink:0;
+}
+.toggle-row.active .toggle-num{background:var(--accent);color:#fff}
+.toggle-label{font-size:16px;font-weight:500;color:var(--dim);transition:color .25s;flex:1}
+.toggle-row.active .toggle-label{color:var(--text)}
+.toggle-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;opacity:0.4;transition:opacity .25s}
+.toggle-row.active .toggle-dot{opacity:1}
+.toggle-switch{
+  width:40px;height:22px;border-radius:11px;
+  background:var(--border);position:relative;
+  transition:background .25s;flex-shrink:0;
+}
+.toggle-row.active .toggle-switch{background:var(--accent)}
+.toggle-switch::after{
+  content:'';position:absolute;
+  top:3px;left:3px;width:16px;height:16px;
+  border-radius:50%;background:#fff;
+  transition:transform .25s;box-shadow:0 1px 3px rgba(0,0,0,0.15);
+}
+.toggle-row.active .toggle-switch::after{transform:translateX(18px)}
+
+.vec-control{margin-bottom:16px}
+.vec-label{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.vec-dot{width:10px;height:10px;border-radius:50%}
+.vec-name{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:600}
+.vec-coord{font-family:'JetBrains Mono',monospace;font-size:16px;color:var(--dim)}
+.vec-inputs{display:flex;gap:10px;align-items:center;margin-top:6px}
+.vec-inputs label{font-size:16px;color:var(--dim);width:16px;text-align:right;font-weight:500}
+.vec-inputs input[type=range]{flex:1;height:6px;-webkit-appearance:none;appearance:none;background:var(--border);border-radius:3px;outline:none}
+.vec-inputs input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;cursor:pointer;border:2px solid var(--bg)}
+.vec-inputs .va input::-webkit-slider-thumb{background:var(--vec-a)}
+.vec-inputs .vb input::-webkit-slider-thumb{background:var(--vec-b)}
+.vec-val{font-family:'JetBrains Mono',monospace;font-size:16px;width:40px;text-align:right}
+
+.info-row{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}
+.info-label{font-size:16px;color:var(--dim);min-width:80px}
+.info-value{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:600}
+
+.detail-panel{
+  overflow:hidden;max-height:0;opacity:0;
+  transition:max-height .4s ease,opacity .3s ease,margin .3s ease,padding .3s ease;
+  padding:0 24px;border-bottom:0px solid var(--border);
+}
+.detail-panel.open{max-height:400px;opacity:1;padding:20px 24px;border-bottom:1px solid var(--border)}
+
+.result-card{border-radius:12px;padding:16px;margin-bottom:12px;border:1px solid var(--border);background:var(--bg);transition:border-color .3s,box-shadow .3s}
+.result-card.match{border-color:var(--accent);box-shadow:0 0 16px rgba(37,99,235,0.1)}
+.result-label{font-size:16px;color:var(--dim);margin-bottom:6px;font-weight:500}
+.result-value{font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:600;color:var(--text)}
+.result-formula{font-size:16px;color:var(--dim);margin-top:6px;font-family:'JetBrains Mono',monospace;line-height:1.6}
+.result-formula .hl-a{color:var(--vec-a)}
+.result-formula .hl-b{color:var(--vec-b)}
+.result-formula .hl-blue{color:var(--accent)}
+.result-formula .hl-accent{color:var(--accent-light)}
+
+.equiv-box{text-align:center;padding:14px;border-radius:12px;background:linear-gradient(135deg,rgba(37,99,235,0.06),rgba(124,58,237,0.06));border:1px solid rgba(37,99,235,0.2)}
+.equiv-symbol{font-size:28px;font-weight:700;color:var(--accent)}
+.equiv-text{font-size:16px;color:var(--dim);margin-top:4px}
+
+.breakdown{border-radius:12px;padding:16px;border:1px solid rgba(37,99,235,0.2);background:rgba(37,99,235,0.02)}
+.bk-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-family:'JetBrains Mono',monospace;font-size:16px}
+.bk-label{color:var(--dim);min-width:160px}
+.bk-val{font-weight:600;color:var(--text)}
+.bk-arrow{font-size:16px;margin:4px 0 8px 0;text-align:center;color:var(--dim)}
+.bk-eq{margin-top:12px;padding-top:12px;border-top:1px dashed rgba(37,99,235,0.2);font-family:'JetBrains Mono',monospace;font-size:16px;color:var(--text);line-height:1.8}
+
+.comp-box{border-radius:12px;padding:16px;border:1px solid rgba(139,92,246,0.25);background:rgba(139,92,246,0.03)}
+.comp-box .comp-title{font-size:16px;font-weight:600;color:var(--comp);margin-bottom:10px}
+.comp-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-family:'JetBrains Mono',monospace;font-size:16px}
+.comp-row .comp-lbl{color:var(--dim);min-width:100px}
+.comp-row .comp-val{font-weight:600;color:var(--text)}
+.comp-eq{margin-top:10px;padding-top:10px;border-top:1px dashed rgba(139,92,246,0.25);font-family:'JetBrains Mono',monospace;font-size:16px;line-height:1.8;color:var(--text)}
+
+.proof-step{font-size:16px;line-height:1.8;color:var(--dim);margin-bottom:10px;padding-left:12px;border-left:3px solid var(--accent)}
+.proof-step .math{font-family:'JetBrains Mono',monospace;color:var(--text);font-size:16px}
+
+.sidebar::-webkit-scrollbar{width:5px}
+.sidebar::-webkit-scrollbar-track{background:transparent}
+.sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Dot Product Equivalence</h1>
+    <div class="subtitle">내적의 대수적 정의와 기하학적 정의가 같음을 증명</div>
+  </div>
+  <div class="proof-badge">a · b = |a||b| cos θ</div>
+</header>
+
+<main>
+  <div class="canvas-wrap">
+    <canvas id="cv"></canvas>
+    <div class="legend" id="legend">
+      <div class="legend-item"><div class="legend-line" style="background:var(--vec-a)"></div><span style="color:var(--vec-a);font-weight:600">a</span></div>
+      <div class="legend-item"><div class="legend-line" style="background:var(--vec-b)"></div><span style="color:var(--vec-b);font-weight:600">b</span></div>
+      <div class="legend-item hidden" id="legCos"><div class="legend-line" style="background:var(--purple)"></div><span style="color:var(--purple);font-weight:600">cos θ</span></div>
+      <div class="legend-item hidden" id="legProj"><div class="legend-line" style="background:var(--proj)"></div><span style="color:var(--proj);font-weight:600">정사영</span><span style="color:var(--dim)">(|b|cosθ)</span></div>
+      <div class="legend-item hidden" id="legDot"><div class="legend-line" style="background:var(--dot-vec);opacity:0.4"></div><span style="color:var(--dot-vec);font-weight:600">내적 벡터</span><span style="color:var(--dim)">(×|a|)</span></div>
+      <div class="legend-item hidden" id="legComp"><div class="legend-line" style="background:var(--comp)"></div><span style="color:var(--comp);font-weight:600">성분곱</span><span style="color:var(--dim)">(xa·xb, ya·yb)</span></div>
+    </div>
+    <div class="canvas-hint">벡터 끝점을 드래그하여 움직여 보세요</div>
+  </div>
+
+  <div class="sidebar">
+    <div class="panel">
+      <div class="panel-title">벡터 설정</div>
+      <div class="vec-control">
+        <div class="vec-label">
+          <div class="vec-dot" style="background:var(--vec-a)"></div>
+          <span class="vec-name" style="color:var(--vec-a)">a</span>
+          <span class="vec-coord" id="vecADisplay"></span>
+        </div>
+        <div class="vec-inputs va"><label>x</label><input type="range" id="ax" min="-5" max="5" step="0.1" value="4"><span class="vec-val" id="axVal"></span></div>
+        <div class="vec-inputs va"><label>y</label><input type="range" id="ay" min="-5" max="5" step="0.1" value="0"><span class="vec-val" id="ayVal"></span></div>
+      </div>
+      <div class="vec-control" style="margin-bottom:0">
+        <div class="vec-label">
+          <div class="vec-dot" style="background:var(--vec-b)"></div>
+          <span class="vec-name" style="color:var(--vec-b)">b</span>
+          <span class="vec-coord" id="vecBDisplay"></span>
+        </div>
+        <div class="vec-inputs vb"><label>x</label><input type="range" id="bx" min="-5" max="5" step="0.1" value="3"><span class="vec-val" id="bxVal"></span></div>
+        <div class="vec-inputs vb"><label>y</label><input type="range" id="by" min="-5" max="5" step="0.1" value="4"><span class="vec-val" id="byVal"></span></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">단계별 보기</div>
+      <div class="toggle-group">
+        <div class="toggle-row" id="tog1" onclick="toggle(1)">
+          <div class="toggle-num">1</div>
+          <div class="toggle-dot" style="background:var(--purple)"></div>
+          <div class="toggle-label">cos θ 값 보기</div>
+          <div class="toggle-switch"></div>
+        </div>
+        <div class="toggle-row" id="tog2" onclick="toggle(2)">
+          <div class="toggle-num">2</div>
+          <div class="toggle-dot" style="background:var(--proj)"></div>
+          <div class="toggle-label">정사영 보기</div>
+          <div class="toggle-switch"></div>
+        </div>
+        <div class="toggle-row" id="tog3" onclick="toggle(3)">
+          <div class="toggle-num">3</div>
+          <div class="toggle-dot" style="background:var(--dot-vec)"></div>
+          <div class="toggle-label">내적 벡터 보기</div>
+          <div class="toggle-switch"></div>
+        </div>
+        <div class="toggle-row" id="tog4" onclick="toggle(4)">
+          <div class="toggle-num">4</div>
+          <div class="toggle-dot" style="background:var(--comp)"></div>
+          <div class="toggle-label">성분곱 보기</div>
+          <div class="toggle-switch"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-panel" id="det1">
+      <div class="panel-title">각도 & 코사인</div>
+      <div class="info-row"><span class="info-label">θ</span><span class="info-value" id="angleVal" style="color:var(--accent)">0°</span></div>
+      <div class="info-row"><span class="info-label">cos θ</span><span class="info-value" id="cosVal" style="color:var(--purple)">0</span></div>
+    </div>
+
+    <div class="detail-panel" id="det2">
+      <div class="panel-title">정사영 (|b|cosθ)</div>
+      <div class="breakdown" style="border-color:rgba(217,119,6,0.25);background:rgba(217,119,6,0.03)">
+        <div class="bk-row">
+          <span class="bk-label"><span style="color:var(--proj);font-weight:600">|b|cosθ</span></span>
+          <span class="bk-val" id="bkScalar">0</span>
+          <span style="color:var(--proj);font-size:16px">← 스칼라 정사영</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-panel" id="det3">
+      <div class="panel-title">내적 벡터 (정사영 × |a|)</div>
+      <div class="breakdown">
+        <div class="bk-row">
+          <span class="bk-label"><span style="color:var(--proj);font-weight:600">정사영</span> |b|cosθ</span>
+          <span class="bk-val" id="bkScalar2">0</span>
+        </div>
+        <div class="bk-arrow">× |a| 를 곱하면 ↓</div>
+        <div class="bk-row">
+          <span class="bk-label"><span style="color:var(--dot-vec);font-weight:600">내적 벡터</span> 길이</span>
+          <span class="bk-val" id="bkDotLen">0</span>
+        </div>
+        <div class="bk-eq" id="bkEquation"></div>
+      </div>
+    </div>
+
+    <div class="detail-panel" id="det4">
+      <div class="panel-title">성분곱 벡터</div>
+      <div class="comp-box">
+        <div class="comp-title">대수적 정의의 시각화</div>
+        <div class="comp-row"><span class="comp-lbl">xa × xb</span><span class="comp-val" id="compX">0</span></div>
+        <div class="comp-row"><span class="comp-lbl">ya × yb</span><span class="comp-val" id="compY">0</span></div>
+        <div class="comp-eq" id="compEq"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">계산 결과 비교</div>
+      <div class="result-card" id="algCard">
+        <div class="result-label">대수적 정의 (Algebraic)</div>
+        <div class="result-value" id="algResult">0</div>
+        <div class="result-formula" id="algFormula"></div>
+      </div>
+      <div class="result-card" id="geoCard">
+        <div class="result-label">기하학적 정의 (Geometric)</div>
+        <div class="result-value" id="geoResult">0</div>
+        <div class="result-formula" id="geoFormula"></div>
+      </div>
+      <div class="equiv-box">
+        <div class="equiv-symbol">≡</div>
+        <div class="equiv-text">두 정의는 항상 같은 값을 줍니다</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">증명 (코사인 법칙)</div>
+      <div class="proof-step"><strong style="color:var(--text)">① 코사인 법칙</strong><br><span class="math">|a-b|² = |a|²+|b|²-2|a||b|cosθ</span></div>
+      <div class="proof-step"><strong style="color:var(--text)">② 좌변을 성분으로 전개</strong><br><span class="math">(a₁-b₁)²+(a₂-b₂)²</span><br><span class="math">= |a|²+|b|²-2(a₁b₁+a₂b₂)</span></div>
+      <div class="proof-step"><strong style="color:var(--text)">③ ①과 ② 비교</strong><br><span class="math">|a||b|cosθ = a₁b₁+a₂b₂</span><br><span class="math" style="color:var(--accent);font-weight:600">∴ a·b = |a||b|cosθ ∎</span></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const cv=document.getElementById('cv');
+const ctx=cv.getContext('2d');
+let W,H,cx,cy,scale;
+const dpr=window.devicePixelRatio||1;
+// a along x-axis, b at an angle — easy to see cosθ and projection
+let ax=4,ay=0,bx=3,by=4,dragging=null;
+
+const show={cos:false,proj:false,dot:false,comp:false};
+
+function toggle(n){
+  const keys=['cos','proj','dot','comp'];
+  show[keys[n-1]]=!show[keys[n-1]];
+  document.getElementById('tog'+n).classList.toggle('active',show[keys[n-1]]);
+  document.getElementById('det'+n).classList.toggle('open',show[keys[n-1]]);
+  const legIds=['legCos','legProj','legDot','legComp'];
+  document.getElementById(legIds[n-1]).classList.toggle('hidden',!show[keys[n-1]]);
+  draw();
+}
+
+function resize(){
+  const r=cv.parentElement.getBoundingClientRect();
+  W=r.width;H=r.height;
+  cv.width=W*dpr;cv.height=H*dpr;
+  cv.style.width=W+'px';cv.style.height=H+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  cx=W/2;cy=H/2;scale=Math.min(W,H)/14;
+  draw();
+}
+function toScreen(x,y){return[cx+x*scale,cy-y*scale]}
+function toWorld(sx,sy){return[(sx-cx)/scale,(cy-sy)/scale]}
+
+function drawGrid(){
+  ctx.strokeStyle='rgba(0,0,0,0.05)';ctx.lineWidth=1;
+  for(let i=-7;i<=7;i++){
+    const[sx]=toScreen(i,0),[,sy]=toScreen(0,i);
+    ctx.beginPath();ctx.moveTo(sx,0);ctx.lineTo(sx,H);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,sy);ctx.lineTo(W,sy);ctx.stroke();
+  }
+  ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(0,cy);ctx.lineTo(W,cy);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx,H);ctx.stroke();
+  ctx.font='500 16px "Noto Sans KR"';ctx.fillStyle='#94a3b8';
+  ctx.fillText('x',W-20,cy-8);ctx.fillText('y',cx+8,20);
+}
+
+function drawVecArrow(fx,fy,tx,ty,color,lw){
+  const[sfx,sfy]=toScreen(fx,fy),[stx,sty]=toScreen(tx,ty);
+  const len=Math.sqrt((stx-sfx)**2+(sty-sfy)**2);
+  if(len<3)return;
+  const ang=Math.atan2(sty-sfy,stx-sfx);
+  ctx.strokeStyle=color;ctx.lineWidth=lw;
+  ctx.beginPath();ctx.moveTo(sfx,sfy);ctx.lineTo(stx,sty);ctx.stroke();
+  const hs=Math.min(lw>3?14:12,len*0.4);
+  ctx.fillStyle=color;ctx.beginPath();
+  ctx.moveTo(stx,sty);
+  ctx.lineTo(stx-hs*Math.cos(ang-0.3),sty-hs*Math.sin(ang-0.3));
+  ctx.lineTo(stx-hs*Math.cos(ang+0.3),sty-hs*Math.sin(ang+0.3));
+  ctx.closePath();ctx.fill();
+}
+
+function drawDraggableVec(x,y,color,label){
+  const[ex,ey]=toScreen(x,y);
+  drawVecArrow(0,0,x,y,color,3);
+  ctx.beginPath();ctx.arc(ex,ey,8,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
+  ctx.beginPath();ctx.arc(ex,ey,4,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();
+  const ang=Math.atan2(ey-cy,ex-cx);
+  ctx.font='700 20px "JetBrains Mono"';ctx.fillStyle=color;
+  ctx.fillText(label,ex+16*Math.cos(ang-0.6),ey+16*Math.sin(ang-0.6)-12);
+}
+
+function drawAngleArc(){
+  const aA=Math.atan2(ay,ax),aB=Math.atan2(by,bx);
+  let start=Math.min(aA,aB),end=Math.max(aA,aB);
+  if(end-start>Math.PI){const t=start;start=end;end=t+2*Math.PI}
+  const r=45;
+  ctx.strokeStyle='rgba(37,99,235,0.5)';ctx.lineWidth=2.5;
+  ctx.beginPath();ctx.arc(cx,cy,r,-end,-start);ctx.stroke();
+  ctx.fillStyle='rgba(37,99,235,0.06)';
+  ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,-end,-start);ctx.closePath();ctx.fill();
+  const mid=(start+end)/2;
+  ctx.font='600 18px "JetBrains Mono"';ctx.fillStyle='#2563eb';
+  ctx.fillText('\u03B8',cx+(r+20)*Math.cos(mid)-6,cy-(r+20)*Math.sin(mid)+6);
+}
+
+function pill(x,y,text,bg,border,fg,fw){
+  ctx.font=(fw||'500')+' 16px "JetBrains Mono"';
+  const tw=ctx.measureText(text).width;
+  ctx.fillStyle=bg;
+  ctx.beginPath();ctx.roundRect(x-tw/2-10,y-14,tw+20,30,14);ctx.fill();
+  if(border){ctx.strokeStyle=border;ctx.lineWidth=1;ctx.stroke()}
+  ctx.fillStyle=fg;ctx.textAlign='center';ctx.fillText(text,x,y+5);ctx.textAlign='left';
+}
+
+function drawCosineVis(){
+  if(!show.cos)return;
+  const magA=Math.sqrt(ax*ax+ay*ay),magB=Math.sqrt(bx*bx+by*by);
+  if(magA<0.01||magB<0.01)return;
+  const dot=ax*bx+ay*by,cosTheta=dot/(magA*magB);
+  const aA=Math.atan2(ay,ax),aB=Math.atan2(by,bx);
+  let mid=(aA+aB)/2;
+  if(Math.abs(aA-aB)>Math.PI)mid+=Math.PI;
+  pill(cx+95*Math.cos(mid),cy-95*Math.sin(mid),
+    'cos \u03B8='+cosTheta.toFixed(3),
+    'rgba(255,255,255,0.92)','rgba(124,58,237,0.25)','#7c3aed','600');
+
+  const bX=24,bY=H-44,bW=180,bH=6;
+  ctx.fillStyle='rgba(255,255,255,0.92)';
+  ctx.beginPath();ctx.roundRect(bX-10,bY-30,bW+20,56,10);ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.06)';ctx.lineWidth=1;ctx.stroke();
+  ctx.font='600 16px "JetBrains Mono"';ctx.fillStyle='#7c3aed';
+  ctx.fillText('cos \u03B8',bX,bY-12);
+  ctx.textAlign='right';ctx.fillText(cosTheta.toFixed(3),bX+bW,bY-12);ctx.textAlign='left';
+  ctx.fillStyle='#e2e8f0';ctx.beginPath();ctx.roundRect(bX,bY,bW,bH,3);ctx.fill();
+  const fW=((cosTheta+1)/2)*bW;
+  const bc=cosTheta>=0?'#2563eb':'#e11d48';
+  ctx.fillStyle=bc;ctx.beginPath();ctx.roundRect(bX,bY,fW,bH,3);ctx.fill();
+  const zX=bX+bW/2;
+  ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(zX,bY-3);ctx.lineTo(zX,bY+bH+3);ctx.stroke();
+  ctx.font='400 16px "JetBrains Mono"';ctx.fillStyle='#94a3b8';
+  ctx.fillText('-1',bX-2,bY+bH+20);
+  ctx.textAlign='center';ctx.fillText('0',zX,bY+bH+20);
+  ctx.textAlign='right';ctx.fillText('1',bX+bW+2,bY+bH+20);ctx.textAlign='left';
+  const dX=bX+fW;
+  ctx.beginPath();ctx.arc(dX,bY+bH/2,6,0,Math.PI*2);ctx.fillStyle=bc;ctx.fill();
+  ctx.beginPath();ctx.arc(dX,bY+bH/2,3,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();
+}
+
+function drawProjection(){
+  if(!show.proj)return;
+  const dot=ax*bx+ay*by,magA2=ax*ax+ay*ay;
+  if(magA2<0.01)return;
+  const magA=Math.sqrt(magA2),scalarProj=dot/magA;
+  const uax=ax/magA,uay=ay/magA;
+  const projX=scalarProj*uax,projY=scalarProj*uay;
+  const[spx,spy]=toScreen(projX,projY);
+  const[sbx,sby]=toScreen(bx,by);
+
+  drawVecArrow(0,0,projX,projY,'#d97706',4);
+  ctx.beginPath();ctx.arc(spx,spy,5,0,Math.PI*2);ctx.fillStyle='#d97706';ctx.fill();
+
+  ctx.setLineDash([5,5]);ctx.strokeStyle='rgba(217,119,6,0.35)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(sbx,sby);ctx.lineTo(spx,spy);ctx.stroke();
+  ctx.setLineDash([]);
+
+  const dx=sbx-spx,dy=sby-spy,dLen=Math.sqrt(dx*dx+dy*dy);
+  if(dLen>14){
+    const nx=dx/dLen*13,ny=dy/dLen*13;
+    const adx=spx-cx,ady=spy-cy,aLen=Math.sqrt(adx*adx+ady*ady);
+    if(aLen>14){
+      const anx=adx/aLen*13,any=ady/aLen*13;
+      ctx.strokeStyle='rgba(217,119,6,0.5)';ctx.lineWidth=1.5;
+      ctx.beginPath();
+      ctx.moveTo(spx+nx,spy+ny);ctx.lineTo(spx+nx+anx,spy+ny+any);ctx.lineTo(spx+anx,spy+any);
+      ctx.stroke();
+    }
+  }
+
+  const pMidX=(cx+spx)/2,pMidY=(cy+spy)/2;
+  const perpX=uay*34,perpY=uax*34;
+  pill(pMidX+perpX,pMidY+perpY,
+    '|b|cos\u03B8='+scalarProj.toFixed(2),
+    'rgba(255,255,255,0.92)','rgba(217,119,6,0.3)','#d97706','600');
+}
+
+function drawDotVec(){
+  if(!show.dot)return;
+  const dot=ax*bx+ay*by,magA2=ax*ax+ay*ay;
+  if(magA2<0.01)return;
+  const magA=Math.sqrt(magA2);
+  const uax=ax/magA,uay=ay/magA;
+  const scalarProj=dot/magA;
+  const projX=scalarProj*uax,projY=scalarProj*uay;
+  const dotVecX=dot*uax,dotVecY=dot*uay;
+  const[spx,spy]=toScreen(projX,projY);
+  const[sdx,sdy]=toScreen(dotVecX,dotVecY);
+
+  drawVecArrow(0,0,dotVecX,dotVecY,'rgba(37,99,235,0.3)',8);
+  ctx.beginPath();ctx.arc(sdx,sdy,6,0,Math.PI*2);ctx.fillStyle='#2563eb';ctx.fill();
+  ctx.beginPath();ctx.arc(sdx,sdy,3,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();
+
+  const perpX=uay*34,perpY=uax*34;
+  const dMidX=(cx+sdx)/2,dMidY=(cy+sdy)/2;
+  pill(dMidX-perpX,dMidY-perpY,
+    'a\u00B7b='+dot.toFixed(2),
+    'rgba(255,255,255,0.92)','rgba(37,99,235,0.3)','#2563eb','600');
+
+  if(show.proj&&Math.abs(dot-scalarProj)>0.1){
+    const bmx=(spx+sdx)/2,bmy=(spy+sdy)/2;
+    const offX=-uay*22,offY=uax*22;
+    ctx.strokeStyle='rgba(100,116,139,0.3)';ctx.lineWidth=1;
+    ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.moveTo(spx+offX,spy-offY);ctx.lineTo(sdx+offX,sdy-offY);ctx.stroke();
+    ctx.setLineDash([]);
+    pill(bmx+offX,bmy-offY,'\u00D7|a|',
+      'rgba(255,255,255,0.88)','rgba(225,29,72,0.2)','#e11d48','600');
+  }
+}
+
+function drawComponentVec(){
+  if(!show.comp)return;
+  const compX=ax*bx,compY=ay*by;
+  drawVecArrow(0,0,compX,compY,'#8b5cf6',3);
+  const[scx,scy]=toScreen(compX,compY);
+  ctx.beginPath();ctx.arc(scx,scy,6,0,Math.PI*2);ctx.fillStyle='#8b5cf6';ctx.fill();
+  ctx.beginPath();ctx.arc(scx,scy,3,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();
+
+  ctx.setLineDash([4,4]);ctx.strokeStyle='rgba(139,92,246,0.25)';ctx.lineWidth=1;
+  const[scxProj]=toScreen(compX,0);
+  ctx.beginPath();ctx.moveTo(scx,scy);ctx.lineTo(scxProj,cy);ctx.stroke();
+  const[,scyProj]=toScreen(0,compY);
+  ctx.beginPath();ctx.moveTo(scx,scy);ctx.lineTo(cx,scyProj);ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.fillStyle='rgba(139,92,246,0.7)';
+  ctx.beginPath();ctx.arc(scxProj,cy,4,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(cx,scyProj,4,0,Math.PI*2);ctx.fill();
+
+  const ang=Math.atan2(scy-cy,scx-cx);
+  pill(scx+18*Math.cos(ang+0.4),scy+18*Math.sin(ang+0.4)-16,
+    '('+compX.toFixed(1)+', '+compY.toFixed(1)+')',
+    'rgba(255,255,255,0.92)','rgba(139,92,246,0.3)','#8b5cf6','500');
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  drawGrid();
+  drawDotVec();
+  drawProjection();
+  drawComponentVec();
+  drawAngleArc();
+  drawCosineVis();
+  drawDraggableVec(ax,ay,'#e11d48','a');
+  drawDraggableVec(bx,by,'#059669','b');
+  ctx.beginPath();ctx.arc(cx,cy,4,0,Math.PI*2);ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fill();
+  ctx.font='400 16px "JetBrains Mono"';ctx.fillStyle='#94a3b8';ctx.fillText('O',cx+8,cy+20);
+  updateUI();
+}
+
+function updateUI(){
+  document.getElementById('axVal').textContent=ax.toFixed(1);
+  document.getElementById('ayVal').textContent=ay.toFixed(1);
+  document.getElementById('bxVal').textContent=bx.toFixed(1);
+  document.getElementById('byVal').textContent=by.toFixed(1);
+  document.getElementById('ax').value=ax;
+  document.getElementById('ay').value=ay;
+  document.getElementById('bx').value=bx;
+  document.getElementById('by').value=by;
+  document.getElementById('vecADisplay').textContent='('+ax.toFixed(1)+', '+ay.toFixed(1)+')';
+  document.getElementById('vecBDisplay').textContent='('+bx.toFixed(1)+', '+by.toFixed(1)+')';
+
+  const dotAlg=ax*bx+ay*by;
+  const magA=Math.sqrt(ax*ax+ay*ay),magB=Math.sqrt(bx*bx+by*by);
+  let theta=0,cosTheta=1;
+  if(magA>0.001&&magB>0.001){cosTheta=Math.max(-1,Math.min(1,dotAlg/(magA*magB)));theta=Math.acos(cosTheta)}
+  const dotGeo=magA*magB*Math.cos(theta);
+  const deg=theta*180/Math.PI;
+  const scalarProj=magA>0.001?dotAlg/magA:0;
+
+  document.getElementById('angleVal').textContent=deg.toFixed(1)+'\u00B0';
+  document.getElementById('cosVal').textContent=cosTheta.toFixed(4);
+
+  document.getElementById('bkScalar').textContent=scalarProj.toFixed(3);
+  document.getElementById('bkScalar2').textContent=scalarProj.toFixed(3);
+  document.getElementById('bkDotLen').textContent=dotAlg.toFixed(3);
+  document.getElementById('bkEquation').innerHTML=
+    '<span style="color:var(--proj);font-weight:600">'+scalarProj.toFixed(3)+'</span>'+
+    ' \u00D7 <span style="color:var(--vec-a);font-weight:600">'+magA.toFixed(3)+'</span>'+
+    ' = <span style="color:var(--dot-vec);font-weight:700">'+dotGeo.toFixed(3)+'</span>'+
+    '<br><span style="color:var(--dim)">\u2234 </span>'+
+    '<span style="color:var(--proj)">|b|cos\u03B8</span>'+
+    '<span style="color:var(--dim)"> \u00D7 </span>'+
+    '<span style="color:var(--vec-a)">|a|</span>'+
+    '<span style="color:var(--dim)"> = </span>'+
+    '<span style="color:var(--dot-vec);font-weight:700">a \u00B7 b</span>';
+
+  const compX=ax*bx,compY=ay*by;
+  document.getElementById('compX').textContent=compX.toFixed(2);
+  document.getElementById('compY').textContent=compY.toFixed(2);
+  document.getElementById('compEq').innerHTML=
+    '<span style="color:var(--comp);font-weight:600">'+compX.toFixed(2)+'</span>'+
+    ' + <span style="color:var(--comp);font-weight:600">'+compY.toFixed(2)+'</span>'+
+    ' = <span style="color:var(--accent);font-weight:700">'+dotAlg.toFixed(2)+'</span>'+
+    '<br><span style="color:var(--dim)">성분곱의 x+y 합 = a \u00B7 b</span>';
+
+  document.getElementById('algResult').textContent=dotAlg.toFixed(3);
+  document.getElementById('algFormula').innerHTML=
+    '<span class="hl-a">'+ax.toFixed(1)+'</span>\u00D7<span class="hl-b">'+bx.toFixed(1)+'</span> + <span class="hl-a">'+ay.toFixed(1)+'</span>\u00D7<span class="hl-b">'+by.toFixed(1)+'</span> = <span class="hl-blue">'+dotAlg.toFixed(3)+'</span>';
+
+  document.getElementById('geoResult').textContent=dotGeo.toFixed(3);
+  document.getElementById('geoFormula').innerHTML=
+    '<span class="hl-a">'+magA.toFixed(2)+'</span>\u00D7<span class="hl-b">'+magB.toFixed(2)+'</span>\u00D7<span class="hl-accent">'+cosTheta.toFixed(4)+'</span> = <span class="hl-blue">'+dotGeo.toFixed(3)+'</span>';
+
+  const match=Math.abs(dotAlg-dotGeo)<0.01;
+  document.getElementById('algCard').classList.toggle('match',match);
+  document.getElementById('geoCard').classList.toggle('match',match);
+}
+
+['ax','ay','bx','by'].forEach(id=>{
+  document.getElementById(id).addEventListener('input',e=>{
+    const v=parseFloat(e.target.value);
+    if(id==='ax')ax=v;else if(id==='ay')ay=v;else if(id==='bx')bx=v;else by=v;
+    draw();
+  });
+});
+
+cv.addEventListener('mousedown',e=>{
+  const r=cv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
+  const[sax,say]=toScreen(ax,ay),[sbx,sby]=toScreen(bx,by);
+  if(Math.hypot(mx-sax,my-say)<25)dragging='a';
+  else if(Math.hypot(mx-sbx,my-sby)<25)dragging='b';
+});
+cv.addEventListener('mousemove',e=>{
+  if(!dragging)return;
+  const r=cv.getBoundingClientRect();
+  let[wx,wy]=toWorld(e.clientX-r.left,e.clientY-r.top);
+  wx=Math.max(-5,Math.min(5,Math.round(wx*10)/10));
+  wy=Math.max(-5,Math.min(5,Math.round(wy*10)/10));
+  if(dragging==='a'){ax=wx;ay=wy}else{bx=wx;by=wy}
+  draw();
+});
+cv.addEventListener('mouseup',()=>dragging=null);
+cv.addEventListener('mouseleave',()=>dragging=null);
+cv.addEventListener('touchstart',e=>{
+  e.preventDefault();
+  const t=e.touches[0],r=cv.getBoundingClientRect(),mx=t.clientX-r.left,my=t.clientY-r.top;
+  const[sax,say]=toScreen(ax,ay),[sbx,sby]=toScreen(bx,by);
+  if(Math.hypot(mx-sax,my-say)<35)dragging='a';
+  else if(Math.hypot(mx-sbx,my-sby)<35)dragging='b';
+},{passive:false});
+cv.addEventListener('touchmove',e=>{
+  if(!dragging)return;e.preventDefault();
+  const t=e.touches[0],r=cv.getBoundingClientRect();
+  let[wx,wy]=toWorld(t.clientX-r.left,t.clientY-r.top);
+  wx=Math.max(-5,Math.min(5,Math.round(wx*10)/10));
+  wy=Math.max(-5,Math.min(5,Math.round(wy*10)/10));
+  if(dragging==='a'){ax=wx;ay=wy}else{bx=wx;by=wy}
+  draw();
+},{passive:false});
+cv.addEventListener('touchend',()=>dragging=null);
+window.addEventListener('resize',resize);
+resize();
+</script>
+</body>
+</html>
