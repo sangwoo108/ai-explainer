@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CNN: 합성곱 → 풀링</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:      #f8fafc;
+  --surface: #ffffff;
+  --panel:   #ffffff;
+  --border:  #e2e8f0;
+  --text:    #0f172a;
+  --muted:   #64748b;
+  --accent:  #2563eb;
+  --accent-d:#1d4ed8;
+  --glow:    rgba(37,99,235,0.18);
+  --conv-col:#7c3aed;   /* 합성곱 — 보라 */
+  --feat-col:#0ea5e9;   /* 특징맵 — 하늘 */
+  --max-col: #ea580c;   /* max pooling — 주황 */
+  --avg-col: #16a34a;   /* avg pooling — 초록 */
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 16px;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── HEADER ── */
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 24px;
+  display: flex; align-items: center; gap: 14px;
+  flex-shrink: 0;
+}
+.badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; font-weight: 700; letter-spacing: 2px;
+  background: var(--accent); color: #fff;
+  padding: 4px 12px; border-radius: 3px; text-transform: uppercase; flex-shrink:0;
+}
+h1 { font-size: 18px; font-weight: 900; letter-spacing: -0.3px; }
+h1 em { color: var(--accent); font-style: normal; }
+
+/* ── CTRL BAR ── */
+.ctrl-bar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 24px;
+  display: flex; align-items: center; gap: 14px;
+  flex-shrink: 0; flex-wrap: wrap;
+}
+.ctrl-group { display:flex; align-items:center; gap:7px; }
+.ctrl-sep {
+  width: 1px; height: 22px; background: var(--border); flex-shrink:0;
+}
+.ctrl-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px; letter-spacing: 0.5px; text-transform: uppercase;
+  color: var(--muted); flex-shrink:0;
+}
+.seg-btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px; font-weight: 600;
+  padding: 5px 14px; border-radius: 5px;
+  border: 1.5px solid var(--border);
+  background: var(--panel); color: var(--muted);
+  cursor: pointer; transition: all 0.1s;
+}
+.seg-btn:hover { border-color: var(--accent); color: var(--accent); }
+.seg-btn.active { background: var(--accent-d); border-color: var(--accent); color:#fff; }
+
+.run-btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px; font-weight: 700;
+  padding: 7px 20px; border-radius: 6px;
+  border: 1.5px solid var(--accent);
+  background: var(--accent-d); color: #fff;
+  cursor: pointer; transition: all 0.1s;
+  box-shadow: 0 0 12px var(--glow);
+  margin-left: auto;
+}
+.run-btn:hover { background: var(--accent); }
+
+.ghost-btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px; font-weight: 600;
+  padding: 5px 14px; border-radius: 5px;
+  border: 1.5px solid var(--border);
+  background: transparent; color: var(--muted);
+  cursor: pointer; transition: all 0.1s;
+}
+.ghost-btn:hover { border-color: var(--text); color: var(--text); }
+
+.spd-wrap {
+  display: flex; align-items: center; gap: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px; color: var(--muted);
+}
+input[type=range] {
+  -webkit-appearance: none; width: 70px; height: 3px;
+  border-radius: 2px; background: var(--border); outline: none;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 12px; height: 12px;
+  border-radius: 50%; background: var(--accent); cursor: pointer;
+}
+
+/* ── MAIN LAYOUT: 3 cards + 2 arrows ── */
+.body-area {
+  flex: 1; min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 48px 1fr 48px 1fr;
+  padding: 12px 16px;
+  gap: 0;
+  align-items: stretch;
+}
+
+/* ── PANELS ── */
+.col-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 8px;
+  min-height: 0; overflow: hidden;
+}
+
+.col-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px; font-weight: 700; letter-spacing: 0.5px;
+  text-transform: uppercase; color: var(--muted); flex-shrink: 0;
+}
+.col-subtitle {
+  font-size: 16px; font-weight: 700; color: var(--text);
+  line-height: 1.25; flex-shrink: 0;
+}
+
+/* Colored top border per panel */
+.panel-input  { border-top: 3px solid var(--accent); }
+.panel-feat   { border-top: 3px solid var(--conv-col); }
+.panel-pool   { border-top: 3px solid var(--max-col); }
+.panel-out    { border-top: 3px solid var(--avg-col); }
+
+.canvas-wrap {
+  flex: 1; min-height: 0; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+}
+canvas { display:block; max-width:100%; max-height:100%; border-radius:5px; }
+#inputCanvas { cursor: crosshair; }
+#featCanvas  { cursor: default; }
+
+/* ── INFO STRIP ── */
+.info-strip {
+  flex-shrink: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px; line-height: 1.6; color: var(--muted);
+  min-height: 52px;
+}
+.info-strip strong { color: var(--text); }
+.v-max { color: var(--max-col); font-weight:700; }
+.v-avg { color: var(--avg-col); font-weight:700; }
+.v-conv{ color: var(--conv-col);font-weight:700; }
+
+/* ── STEP BAR ── */
+.step-bar { flex-shrink:0; display:flex; gap:3px; flex-wrap:wrap; }
+.step-dot { width:6px; height:6px; border-radius:50%; background:var(--border); transition:background 0.1s; }
+.step-dot.done    { background: rgba(37,99,235,0.4); }
+.step-dot.current { background: var(--accent); transform:scale(1.5); }
+
+/* ── KERNEL MINI ── */
+.kernel-mini {
+  flex-shrink: 0;
+  display: grid; gap: 2px;
+}
+.km-cell {
+  display:flex; align-items:center; justify-content:center;
+  font-family:'JetBrains Mono',monospace;
+  font-size: 16px; font-weight:700; border-radius:3px;
+}
+
+/* ── CONNECTOR ── */
+.connector {
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  gap:6px; align-self:center;
+}
+.connector svg { opacity:0.6; }
+.conn-label {
+  font-family:'JetBrains Mono',monospace;
+  font-size:16px; color:var(--muted);
+  text-align:center; line-height:1.4;
+}
+
+/* ── SIZE TAG ── */
+.size-tag {
+  flex-shrink:0;
+  font-family:'JetBrains Mono',monospace;
+  font-size:16px; color:var(--muted);
+  display:flex; gap:8px; align-items:center;
+}
+.size-tag span { color:var(--text); font-weight:600; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="badge">CNN</div>
+  <h1>그리기 → 합성곱 → 특징맵 → <em>풀링</em></h1>
+</header>
+
+<div class="ctrl-bar">
+  <!-- Kernel picker -->
+  <div class="ctrl-group">
+    <span class="ctrl-label">커널</span>
+    <button class="seg-btn active" id="kbEye"      onclick="selectKernel('eye')">눈(◎)</button>
+    <button class="seg-btn"        id="kbCross"    onclick="selectKernel('cross')">십자(+)</button>
+    <button class="seg-btn"        id="kbCorner"   onclick="selectKernel('corner')">ㄱ자</button>
+    <button class="seg-btn"        id="kbDiag"     onclick="selectKernel('diagonal')">사선(╲)</button>
+  </div>
+  <div class="ctrl-sep"></div>
+  <!-- Pool mode -->
+  <div class="ctrl-group">
+    <span class="ctrl-label">풀링</span>
+    <button class="seg-btn active" id="btnMax" onclick="setPoolMode('max')">Max</button>
+    <button class="seg-btn"        id="btnAvg" onclick="setPoolMode('avg')">Avg</button>
+  </div>
+  <!-- Window -->
+  <div class="ctrl-group">
+    <span class="ctrl-label">윈도우</span>
+    <button class="seg-btn active" id="btnW2" onclick="setWin(2)">2×2</button>
+    <button class="seg-btn"        id="btnW3" onclick="setWin(3)">3×3</button>
+  </div>
+  <div class="ctrl-sep"></div>
+  <!-- Draw tools -->
+  <div class="ctrl-group">
+    <button class="seg-btn active" id="drawBtn"  onclick="setDrawMode('draw')">✏️ 그리기</button>
+    <button class="seg-btn"        id="eraseBtn" onclick="setDrawMode('erase')">⬜ 지우기</button>
+    <button class="ghost-btn"      onclick="clearInput()">전체 지우기</button>
+    <button class="ghost-btn"      onclick="loadPreset()">예시</button>
+  </div>
+  <div class="spd-wrap">
+    속도<input type="range" id="speedSlider" min="1" max="10" value="7">
+  </div>
+  <button class="ghost-btn" onclick="fullReset()">↺ 리셋</button>
+  <button class="run-btn" id="runBtn">▶ 시작</button>
+</div>
+
+<div class="body-area">
+
+  <!-- 1. INPUT -->
+  <div class="col-panel panel-input">
+    <div class="col-title">① 입력 이미지</div>
+    <div class="col-subtitle">패턴을 직접 그리세요</div>
+    <div class="canvas-wrap"><canvas id="inputCanvas"></canvas></div>
+    <div class="size-tag">크기 <span id="szInput">—</span></div>
+  </div>
+
+  <!-- CONN 1: conv -->
+  <div class="connector">
+    <svg width="28" height="28" viewBox="0 0 28 28">
+      <path d="M3 14L22 14M16 7L23 14L16 21"
+        stroke="var(--conv-col)" stroke-width="2.5" fill="none"
+        stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div class="conn-label" style="color:var(--conv-col)">합성곱</div>
+  </div>
+
+  <!-- 2. FEATURE MAP -->
+  <div class="col-panel panel-feat">
+    <div class="col-title">② 특징맵 (Conv 출력)</div>
+    <div class="col-subtitle" id="featSubtitle">커널이 반응한 위치</div>
+    <div class="canvas-wrap"><canvas id="featCanvas"></canvas></div>
+    <div class="info-strip" id="convInfo">합성곱을 먼저 실행하세요.</div>
+    <!-- kernel mini grid -->
+    <div style="display:flex;align-items:flex-start;gap:10px;flex-shrink:0;">
+      <div>
+        <div class="col-title" style="margin-bottom:4px">커널</div>
+        <div id="kernelMini" class="kernel-mini"></div>
+      </div>
+      <div style="flex:1">
+        <div class="step-bar" id="convStepBar"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONN 2: pool -->
+  <div class="connector">
+    <svg width="28" height="28" viewBox="0 0 28 28">
+      <path d="M3 14L22 14M16 7L23 14L16 21"
+        stroke="var(--max-col)" stroke-width="2.5" fill="none"
+        stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div class="conn-label" id="poolConnLabel" style="color:var(--max-col)">Max<br>Pooling</div>
+  </div>
+
+  <!-- 3. POOLED -->
+  <div class="col-panel panel-pool">
+    <div class="col-title">③ 풀링 출력</div>
+    <div class="col-subtitle" id="poolSubtitle">각 영역의 최댓값</div>
+    <div class="canvas-wrap"><canvas id="poolCanvas"></canvas></div>
+    <div class="info-strip" id="poolInfo">특징맵이 생성되면 풀링을 실행합니다.</div>
+    <div class="step-bar" id="poolStepBar"></div>
+    <div class="size-tag">
+      <span id="szFeat">—</span> → <span id="szPool">—</span>
+      &nbsp;<span id="comprTag" style="color:var(--max-col);font-size:16px"></span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// KERNELS
+// ═══════════════════════════════════════════
+const KERNELS = {
+  eye: {
+    name:'눈(◎)', size:5,
+    data:[[0,1,1,1,0],[1,0,0,0,1],[1,0,1,0,1],[1,0,0,0,1],[0,1,1,1,0]],
+    preset:'eye',
+  },
+  cross: {
+    name:'십자(+)', size:5,
+    data:[[0,0,1,0,0],[0,0,1,0,0],[1,1,1,1,1],[0,0,1,0,0],[0,0,1,0,0]],
+    preset:'cross',
+  },
+  corner: {
+    name:'ㄱ자', size:5,
+    data:[[1,1,1,0,0],[1,0,0,0,0],[1,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0]],
+    preset:'corner',
+  },
+  diagonal: {
+    name:'사선(╲)', size:5,
+    data:[[1,0,0,0,0],[0,1,0,0,0],[0,0,1,0,0],[0,0,0,1,0],[0,0,0,0,1]],
+    preset:'diagonal',
+  },
+};
+
+// ═══════════════════════════════════════════
+// INPUT GRID
+// ═══════════════════════════════════════════
+const IW = 16, IH = 16;
+let INPUT = Array.from({length:IH}, ()=>Array(IW).fill(0));
+
+const PRESETS = {
+  eye: () => {
+    clearInput();
+    [[5,5],[5,6],[5,7],[5,8],[5,9],
+     [6,4],[6,10],[7,4],[7,7],[7,10],
+     [8,4],[8,10],[9,5],[9,6],[9,7],[9,8],[9,9]].forEach(([r,c])=>{
+      if(r<IH&&c<IW) INPUT[r][c]=1;
+    });
+  },
+  cross: () => {
+    clearInput();
+    const mid=Math.floor(IW/2);
+    for(let r=0;r<IH;r++) INPUT[r][mid]=1;
+    for(let c=0;c<IW;c++) INPUT[Math.floor(IH/2)][c]=1;
+  },
+  corner: () => {
+    clearInput();
+    for(let c=1;c<7;c++) INPUT[1][c]=1;
+    for(let r=1;r<7;r++) INPUT[r][1]=1;
+  },
+  diagonal: () => {
+    clearInput();
+    for(let i=0;i<IH;i++) if(i<IW) INPUT[i][i]=1;
+  },
+};
+
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+let kernelKey  = 'eye';
+let poolMode   = 'max';
+let winSize    = 2;
+let drawMode   = 'draw';
+let isMouseDown = false;
+
+// Phase: 'idle' | 'conv' | 'pool' | 'done'
+let phase = 'idle';
+let convStep = 0, poolStep = 0;
+let playing = false, animId = null, lastTime = 0;
+
+let featMap  = [];   // conv output
+let poolMap  = [];   // pool output
+
+// ═══════════════════════════════════════════
+// CANVAS SIZES
+// ═══════════════════════════════════════════
+let ICELL=20, FCELL=24, PCELL=30;
+
+const inputC = document.getElementById('inputCanvas');
+const featC  = document.getElementById('featCanvas');
+const poolC  = document.getElementById('poolCanvas');
+const iCtx   = inputC.getContext('2d');
+const fCtx   = featC.getContext('2d');
+const pCtx   = poolC.getContext('2d');
+
+function featW() { const k=KERNELS[kernelKey]; return IW-k.size+1; }
+function featH() { const k=KERNELS[kernelKey]; return IH-k.size+1; }
+function poolW() { return Math.floor((featW()-winSize)/winSize)+1; }
+function poolH() { return Math.floor((featH()-winSize)/winSize)+1; }
+
+function computeSizes() {
+  const iWrap = inputC.closest('.canvas-wrap');
+  const fWrap = featC.closest('.canvas-wrap');
+  const pWrap = poolC.closest('.canvas-wrap');
+  if (!iWrap||!fWrap||!pWrap) return;
+
+  const iw=iWrap.clientWidth-2, ih=iWrap.clientHeight-2;
+  ICELL = Math.max(10, Math.floor(Math.min(iw/IW, ih/IH)));
+
+  const fw=fWrap.clientWidth-2, fh=fWrap.clientHeight-2;
+  FCELL = Math.max(10, Math.floor(Math.min(fw/featW(), fh/featH())));
+
+  const pw=pWrap.clientWidth-2, ph=pWrap.clientHeight-2;
+  PCELL = Math.max(10, Math.floor(Math.min(pw/poolW(), ph/poolH())));
+}
+
+function setupCanvases() {
+  computeSizes();
+  inputC.width = IW*ICELL;   inputC.height = IH*ICELL;
+  featC.width  = featW()*FCELL; featC.height = featH()*FCELL;
+  poolC.width  = poolW()*PCELL; poolC.height = poolH()*PCELL;
+}
+
+// ═══════════════════════════════════════════
+// DRAW INPUT
+// ═══════════════════════════════════════════
+function drawInput(hlRow=-1, hlCol=-1) {
+  const k = KERNELS[kernelKey];
+  iCtx.clearRect(0,0,inputC.width,inputC.height);
+  for(let r=0;r<IH;r++) {
+    for(let c=0;c<IW;c++) {
+      const inK = hlRow>=0 && r>=hlRow&&r<hlRow+k.size && c>=hlCol&&c<hlCol+k.size;
+      const val = INPUT[r][c];
+      iCtx.fillStyle = inK
+        ? (val?'#7c3aed':'rgba(124,58,237,0.08)')
+        : (val?'#1e293b':'#f1f5f9');
+      iCtx.fillRect(c*ICELL+1, r*ICELL+1, ICELL-2, ICELL-2);
+      iCtx.strokeStyle = inK ? 'rgba(124,58,237,0.35)' : '#e2e8f0';
+      iCtx.lineWidth=1;
+      iCtx.strokeRect(c*ICELL+.5, r*ICELL+.5, ICELL-1, ICELL-1);
+    }
+  }
+  if(hlRow>=0) {
+    iCtx.strokeStyle='#7c3aed'; iCtx.lineWidth=2;
+    iCtx.shadowColor='rgba(124,58,237,0.4)'; iCtx.shadowBlur=10;
+    iCtx.strokeRect(hlCol*ICELL+1, hlRow*ICELL+1, k.size*ICELL-2, k.size*ICELL-2);
+    iCtx.shadowBlur=0;
+  }
+}
+
+// ═══════════════════════════════════════════
+// DRAW FEATURE MAP
+// ═══════════════════════════════════════════
+function drawFeat(hlRow=-1, hlCol=-1, hlWinR=-1, hlWinC=-1) {
+  const fw=featW(), fh=featH();
+  fCtx.clearRect(0,0,featC.width,featC.height);
+  const vals=featMap.flat().filter(v=>v!=null);
+  const fmin=vals.length?Math.min(...vals):0;
+  const fmax=vals.length?Math.max(...vals):1;
+
+  for(let r=0;r<fh;r++) {
+    for(let c=0;c<fw;c++) {
+      const v = featMap[r]?.[c];
+      const isConvAct = r===hlRow && c===hlCol;
+      // pool window highlight
+      const inPool = hlWinR>=0
+        && r>=hlWinR&&r<hlWinR+winSize
+        && c>=hlWinC&&c<hlWinC+winSize;
+
+      if(v!=null) {
+        const n = fmax===fmin?0.5:(v-fmin)/(fmax-fmin);
+        if(inPool) {
+          // orange tint for pool window
+          const pCol = poolMode==='max'
+            ? `rgb(${Math.round(247*n+30*(1-n))},${Math.round(129*n+20*(1-n))},${Math.round(102*n+15*(1-n))})`
+            : `rgb(${Math.round(86*n+15*(1-n))},${Math.round(211*n+40*(1-n))},${Math.round(100*n+15*(1-n))})`;
+          fCtx.fillStyle = pCol;
+        } else {
+          // blue scale
+          const rv=Math.round(56*n+13*(1-n));
+          const gv=Math.round(189*n+17*(1-n));
+          const bv=Math.round(253*n+34*(1-n));
+          fCtx.fillStyle=`rgb(${rv},${gv},${bv})`;
+        }
+      } else {
+        fCtx.fillStyle='#f1f5f9';
+      }
+      fCtx.fillRect(c*FCELL+1, r*FCELL+1, FCELL-2, FCELL-2);
+
+      const bCol = isConvAct?'#7c3aed': inPool?(poolMode==='max'?'rgba(234,88,12,0.6)':'rgba(22,163,74,0.6)'):'#e2e8f0';
+      fCtx.strokeStyle=bCol; fCtx.lineWidth=isConvAct||inPool?1.8:1;
+      fCtx.strokeRect(c*FCELL+.5, r*FCELL+.5, FCELL-1, FCELL-1);
+
+      if(v!=null) {
+        const n=fmax===fmin?0.5:(v-fmin)/(fmax-fmin);
+        fCtx.fillStyle=n>0.5?'rgba(255,255,255,0.95)':'#1e293b';
+        fCtx.font=`600 ${Math.max(9,FCELL*0.3)|0}px 'JetBrains Mono',monospace`;
+        fCtx.textAlign='center'; fCtx.textBaseline='middle';
+        fCtx.fillText(Math.round(v), c*FCELL+FCELL/2, r*FCELL+FCELL/2);
+      }
+    }
+  }
+
+  // pool window outline
+  if(hlWinR>=0) {
+    const col = poolMode==='max'?'#ea580c':'#16a34a';
+    fCtx.strokeStyle=col; fCtx.lineWidth=2.2;
+    fCtx.shadowColor=col; fCtx.shadowBlur=8;
+    fCtx.strokeRect(hlWinC*FCELL+1, hlWinR*FCELL+1, winSize*FCELL-2, winSize*FCELL-2);
+    fCtx.shadowBlur=0;
+  }
+}
+
+// ═══════════════════════════════════════════
+// DRAW POOL OUTPUT
+// ═══════════════════════════════════════════
+function drawPool(activeR=-1, activeC=-1) {
+  const pw=poolW(), ph=poolH();
+  pCtx.clearRect(0,0,poolC.width,poolC.height);
+  const vals=poolMap.flat().filter(v=>v!=null);
+  const fmax=vals.length?Math.max(...vals):1;
+
+  for(let r=0;r<ph;r++) {
+    for(let c=0;c<pw;c++) {
+      const v=poolMap[r]?.[c];
+      const isAct=r===activeR&&c===activeC;
+      if(v!=null) {
+        const n=fmax===0?0:v/fmax;
+        const col = poolMode==='max'
+          ? [234,88,12] : [22,163,74];
+        const base=[241,245,249];
+        pCtx.fillStyle=`rgb(${Math.round(col[0]*n+base[0]*(1-n))},${Math.round(col[1]*n+base[1]*(1-n))},${Math.round(col[2]*n+base[2]*(1-n))})`;
+      } else {
+        pCtx.fillStyle='#f1f5f9';
+      }
+      pCtx.fillRect(c*PCELL+1, r*PCELL+1, PCELL-2, PCELL-2);
+      const bCol=isAct?(poolMode==='max'?'#ea580c':'#16a34a'):'#e2e8f0';
+      pCtx.strokeStyle=bCol; pCtx.lineWidth=isAct?2.2:1;
+      if(isAct){pCtx.shadowColor=bCol;pCtx.shadowBlur=8;}
+      pCtx.strokeRect(c*PCELL+.5, r*PCELL+.5, PCELL-1, PCELL-1);
+      pCtx.shadowBlur=0;
+      if(v!=null) {
+        const n=fmax===0?0:v/fmax;
+        pCtx.fillStyle=n>0.55?'rgba(255,255,255,0.95)':'#1e293b';
+        pCtx.font=`700 ${Math.max(10,PCELL*0.32)|0}px 'JetBrains Mono',monospace`;
+        pCtx.textAlign='center'; pCtx.textBaseline='middle';
+        const disp = Number.isInteger(v)?v:v.toFixed(1);
+        pCtx.fillText(disp, c*PCELL+PCELL/2, r*PCELL+PCELL/2);
+      }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════
+// COMPUTATION
+// ═══════════════════════════════════════════
+function computeConvVal(row, col) {
+  const k=KERNELS[kernelKey];
+  let sum=0;
+  for(let kr=0;kr<k.size;kr++)
+    for(let kc=0;kc<k.size;kc++)
+      sum+=INPUT[row+kr][col+kc]*k.data[kr][kc];
+  return sum;
+}
+
+function computePoolVal(row, col) {
+  // stride = winSize (non-overlapping)
+  const sr=row*winSize, sc=col*winSize;
+  const vals=[];
+  for(let dr=0;dr<winSize;dr++)
+    for(let dc=0;dc<winSize;dc++)
+      if(featMap[sr+dr]) vals.push(featMap[sr+dr][sc+dc]??0);
+  if(!vals.length) return 0;
+  return poolMode==='max'?Math.max(...vals):vals.reduce((a,b)=>a+b,0)/vals.length;
+}
+
+// ═══════════════════════════════════════════
+// STEP LOGIC
+// ═══════════════════════════════════════════
+function doConvStep() {
+  const fw=featW(), fh=featH();
+  if(convStep>=fh*fw) {
+    phase='pool';
+    document.getElementById('convInfo').innerHTML =
+      `합성곱 완료! <span class="v-conv">${fh}×${fw}</span> 특징맵 생성됨`;
+    updateSizeTags();
+    buildPoolStepBar();
+    return;
+  }
+  const row=Math.floor(convStep/fw), col=convStep%fw;
+  const val=computeConvVal(row,col);
+  if(!featMap[row]) featMap[row]=[];
+  featMap[row][col]=val;
+
+  const k=KERNELS[kernelKey];
+  const maxMatch=k.data.flat().filter(v=>v===1).length;
+  let match=0;
+  for(let kr=0;kr<k.size;kr++)
+    for(let kc=0;kc<k.size;kc++)
+      if(k.data[kr][kc]===1&&INPUT[row+kr][col+kc]===1) match++;
+  const pct=maxMatch>0?Math.round(match/maxMatch*100):0;
+
+  drawInput(row, col);
+  drawFeat(row, col);
+  document.getElementById('convInfo').innerHTML =
+    `위치 [${row},${col}] — 일치 <span class="v-conv">${match}/${maxMatch}칸 (${pct}%)</span> → 값 ${Math.round(val)}`;
+  updateConvStepBar();
+  convStep++;
+}
+
+function doPoolStep() {
+  const pw=poolW(), ph=poolH();
+  if(poolStep>=ph*pw) {
+    phase='done';
+    playing=false;
+    document.getElementById('runBtn').textContent='▶ 다시 시작';
+    drawInput(); drawFeat(-1,-1); drawPool();
+    return;
+  }
+  const row=Math.floor(poolStep/pw), col=poolStep%pw;
+  const val=computePoolVal(row,col);
+  if(!poolMap[row]) poolMap[row]=[];
+  poolMap[row][col]=val;
+
+  const sr=row*winSize, sc=col*winSize;
+  const vals=[];
+  for(let dr=0;dr<winSize;dr++)
+    for(let dc=0;dc<winSize;dc++)
+      if(featMap[sr+dr]) vals.push(featMap[sr+dr][sc+dc]??0);
+
+  drawFeat(-1,-1,sr,sc);
+  drawPool(row, col);
+
+  const disp=poolMode==='max'
+    ? `최댓값: <span class="v-max">${Math.max(...vals)}</span>`
+    : `평균: <span class="v-avg">${(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1)}</span>`;
+  document.getElementById('poolInfo').innerHTML =
+    `윈도우 [${vals.join(', ')}] → ${disp} → 출력 [${row},${col}]`;
+  updatePoolStepBar();
+  poolStep++;
+}
+
+// ═══════════════════════════════════════════
+// ANIMATION
+// ═══════════════════════════════════════════
+function getInterval() {
+  const s=parseInt(document.getElementById('speedSlider').value);
+  return Math.round(400-(s-1)*370/9);
+}
+function animate(ts) {
+  if(!playing) return;
+  if(ts-lastTime>getInterval()) {
+    lastTime=ts;
+    if(phase==='conv') doConvStep();
+    else if(phase==='pool') doPoolStep();
+    else { playing=false; }
+  }
+  animId=requestAnimationFrame(animate);
+}
+
+function startPlay() {
+  phase='conv'; playing=true;
+  document.getElementById('runBtn').textContent='⏸ 정지';
+  animId=requestAnimationFrame(animate);
+}
+
+// Single click handler — no duplicate
+document.getElementById('runBtn').addEventListener('click', ()=>{
+  if(phase==='idle'||phase==='done') { fullReset(); startPlay(); return; }
+  playing=!playing;
+  document.getElementById('runBtn').textContent=playing?'⏸ 정지':'▶ 계속';
+  if(playing) animId=requestAnimationFrame(animate);
+  else cancelAnimationFrame(animId);
+});
+
+// ═══════════════════════════════════════════
+// RESET
+// ═══════════════════════════════════════════
+function fullReset() {
+  playing=false; cancelAnimationFrame(animId);
+  phase='idle'; convStep=0; poolStep=0;
+  const fw=featW(), fh=featH();
+  featMap=Array.from({length:fh},()=>Array(fw).fill(null));
+  poolMap=Array.from({length:poolH()},()=>Array(poolW()).fill(null));
+  document.getElementById('runBtn').textContent='▶ 시작';
+  document.getElementById('convInfo').textContent='합성곱을 먼저 실행하세요.';
+  document.getElementById('poolInfo').textContent='특징맵이 생성되면 풀링을 실행합니다.';
+  buildConvStepBar(); buildPoolStepBar();
+  setupCanvases();
+  drawInput(); drawFeat(); drawPool();
+  updateSizeTags();
+}
+
+// ═══════════════════════════════════════════
+// STEP BARS
+// ═══════════════════════════════════════════
+function buildConvStepBar() {
+  const bar=document.getElementById('convStepBar');
+  bar.innerHTML='';
+  for(let i=0;i<featW()*featH();i++){
+    const d=document.createElement('div');
+    d.className='step-dot'; d.id=`cd-${i}`; bar.appendChild(d);
+  }
+}
+function buildPoolStepBar() {
+  const bar=document.getElementById('poolStepBar');
+  bar.innerHTML='';
+  for(let i=0;i<poolW()*poolH();i++){
+    const d=document.createElement('div');
+    d.className='step-dot'; d.id=`pd-${i}`; bar.appendChild(d);
+  }
+}
+function updateConvStepBar() {
+  for(let i=0;i<featW()*featH();i++){
+    const d=document.getElementById(`cd-${i}`);
+    if(!d) continue;
+    d.className='step-dot'+(i<convStep-1?' done':i===convStep-1?' current':'');
+  }
+}
+function updatePoolStepBar() {
+  for(let i=0;i<poolW()*poolH();i++){
+    const d=document.getElementById(`pd-${i}`);
+    if(!d) continue;
+    d.className='step-dot'+(i<poolStep-1?' done':i===poolStep-1?' current':'');
+  }
+}
+
+// ═══════════════════════════════════════════
+// KERNEL MINI PREVIEW
+// ═══════════════════════════════════════════
+function renderKernelMini() {
+  const k=KERNELS[kernelKey];
+  const el=document.getElementById('kernelMini');
+  el.style.gridTemplateColumns=`repeat(${k.size},14px)`;
+  el.innerHTML='';
+  k.data.flat().forEach(v=>{
+    const cell=document.createElement('div');
+    cell.className='km-cell';
+    cell.style.width='18px'; cell.style.height='18px'; cell.style.fontSize='12px';
+    cell.style.background=v?'rgba(124,58,237,0.12)':'#f8fafc';
+    cell.style.border=v?'1px solid rgba(124,58,237,0.4)':'1px solid #e2e8f0';
+    cell.style.color=v?'#7c3aed':'#cbd5e1';
+    cell.textContent=v;
+    el.appendChild(cell);
+  });
+}
+
+// ═══════════════════════════════════════════
+// SIZE TAGS
+// ═══════════════════════════════════════════
+function updateSizeTags() {
+  document.getElementById('szInput').textContent=`${IH}×${IW}`;
+  document.getElementById('szFeat').textContent=`${featH()}×${featW()}`;
+  document.getElementById('szPool').textContent=`${poolH()}×${poolW()}`;
+  const ratio=(1-poolH()*poolW()/(featH()*featW()))*100;
+  const col=poolMode==='max'?'var(--max-col)':'var(--avg-col)';
+  document.getElementById('comprTag').style.color=col;
+  document.getElementById('comprTag').textContent=`↓${ratio.toFixed(0)}% 압축`;
+}
+
+// ═══════════════════════════════════════════
+// CONTROLS
+// ═══════════════════════════════════════════
+function selectKernel(key) {
+  kernelKey=key;
+  ['eye','cross','corner','diagonal'].forEach(k=>{
+    const id={eye:'kbEye',cross:'kbCross',corner:'kbCorner',diagonal:'kbDiag'}[k];
+    document.getElementById(id).classList.toggle('active',k===key);
+  });
+  renderKernelMini();
+  fullReset();
+}
+function setPoolMode(m) {
+  poolMode=m;
+  document.getElementById('btnMax').classList.toggle('active',m==='max');
+  document.getElementById('btnAvg').classList.toggle('active',m==='avg');
+  const col=m==='max'?'var(--max-col)':'var(--avg-col)';
+  document.getElementById('poolConnLabel').style.color=col;
+  document.getElementById('poolConnLabel').innerHTML=m==='max'?'Max<br>Pooling':'Avg<br>Pooling';
+  document.querySelector('.panel-pool').style.borderTopColor=m==='max'?'var(--max-col)':'var(--avg-col)';
+  document.getElementById('poolSubtitle').textContent=m==='max'?'각 영역의 최댓값':'각 영역의 평균값';
+  fullReset();
+}
+function setWin(w) {
+  winSize=w;
+  document.getElementById('btnW2').classList.toggle('active',w===2);
+  document.getElementById('btnW3').classList.toggle('active',w===3);
+  fullReset();
+}
+
+// ── DRAW MODE ──
+function setDrawMode(mode) {
+  drawMode=mode;
+  document.getElementById('drawBtn').classList.toggle('active',mode==='draw');
+  document.getElementById('eraseBtn').classList.toggle('active',mode==='erase');
+}
+function clearInput() {
+  INPUT=Array.from({length:IH},()=>Array(IW).fill(0));
+  fullReset(); drawInput();
+}
+function loadPreset() {
+  PRESETS[KERNELS[kernelKey].preset]?.();
+  fullReset(); drawInput();
+}
+
+// ── MOUSE DRAW ──
+function getCellFromEvt(e) {
+  const rect=inputC.getBoundingClientRect();
+  const sx=inputC.width/rect.width, sy=inputC.height/rect.height;
+  const x=(( e.clientX??e.touches?.[0]?.clientX)-rect.left)*sx;
+  const y=(( e.clientY??e.touches?.[0]?.clientY)-rect.top)*sy;
+  return {r:Math.floor(y/ICELL), c:Math.floor(x/ICELL)};
+}
+function paintCell(e) {
+  const {r,c}=getCellFromEvt(e);
+  if(r<0||r>=IH||c<0||c>=IW) return;
+  INPUT[r][c]=drawMode==='draw'?1:0;
+  fullReset(); drawInput();
+}
+inputC.addEventListener('mousedown',e=>{isMouseDown=true;paintCell(e);});
+inputC.addEventListener('mousemove',e=>{if(isMouseDown)paintCell(e);});
+window.addEventListener('mouseup',()=>isMouseDown=false);
+inputC.addEventListener('touchstart',e=>{e.preventDefault();paintCell(e);});
+inputC.addEventListener('touchmove', e=>{e.preventDefault();paintCell(e);});
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+window.addEventListener('load', ()=>{
+  renderKernelMini();
+  fullReset();
+  PRESETS.eye(); drawInput();
+});
+window.addEventListener('resize', ()=>{ setupCanvases(); drawInput(); drawFeat(); drawPool(); });
+</script>
+</body>
+</html>
