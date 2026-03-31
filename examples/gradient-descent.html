@@ -102,6 +102,7 @@
     const xMax = 16;
     const bestX = 8; // 8시간이 버그가 제일 적은 골든 타임
     const themeColor = '#ff5e57'; // 미분값 테마색 (빨간색 - 경고)
+    let tuTraceData = [];
     let traceData = [];
 
     // f(x) = 0.5 * (x - 8)^2 + 10  (8시간일 때 버그 10개로 최소)
@@ -138,7 +139,7 @@
         type: 'line',
         data: {
             datasets: [
-                { label: 'Bugs', data: Array.from({length: 81}, (_, i) => ({x: i/5, y: f(i/5)})), borderColor: '#05c46b', borderWidth: 3, pointRadius: 0, fill: false },
+                { label: 'Bugs', data: [], borderColor: '#05c46b', borderWidth: 3, pointRadius: 2, pointHoverRadius: 2, fill: false, spanGaps: true },  
                 { label: 'Now', data: [], backgroundColor: themeColor, pointRadius: 8, showLine: false },
                 { label: 'Tangent', data: [], borderColor: themeColor, borderWidth: 2, borderDash: [5, 3], pointRadius: 0 }
             ]
@@ -178,6 +179,11 @@
             msgEl.style.color = "#ff5e57";
         }
 
+        if (!tuTraceData.some(p => Math.abs(p.x - x) < 0.1)) {
+            tuTraceData.push({x: x, y: y});
+            tuTraceData.sort((a, b) => a.x - b.x);
+        }
+        tuChart.data.datasets[0].data = tuTraceData;
         tuChart.data.datasets[1].data = [{x: x, y: y}];
         tuChart.data.datasets[2].data = [{x: x-3, y: y - gradient*3}, {x: x+3, y: y + gradient*3}];
         tuChart.update('none');
@@ -192,7 +198,12 @@
     }
 
     function resetTrace() {
+        tuTraceData = [];
         traceData = [];
+        tuChart.data.datasets[0].data = [];
+        tuChart.data.datasets[1].data = [];
+        tuChart.data.datasets[2].data = [];
+        tuChart.update();
         muChart.data.datasets[0].data = [];
         muChart.update();
     }
